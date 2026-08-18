@@ -1,4 +1,3 @@
-```python
 import os
 import sqlite3
 import discord
@@ -389,4 +388,3 @@ if not TOKEN:
     )
 
 bot.run(TOKEN)
-```
