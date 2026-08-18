@@ -376,8 +376,104 @@ async def addxp(
         f"XP atual: **{xp_atual}**",
         ephemeral=True
     )
+@bot.tree.command(
+    name="apagarficha",
+    description="Apaga sua ficha de personagem."
+)
+async def apagarficha(interaction: discord.Interaction):
 
+    user_id = interaction.user.id
 
+    cursor.execute(
+        "SELECT nome_personagem FROM fichas WHERE user_id = ?",
+        (user_id,)
+    )
+
+    ficha = cursor.fetchone()
+
+    if ficha is None:
+        await interaction.response.send_message(
+            "❌ Você não possui uma ficha para apagar.",
+            ephemeral=True
+        )
+        return
+
+    nome = ficha[0]
+
+    cursor.execute(
+        "DELETE FROM fichas WHERE user_id = ?",
+        (user_id,)
+    )
+
+    db.commit()
+
+    await interaction.response.send_message(
+        f"🗑️ A ficha **{nome}** foi apagada com sucesso.\n"
+        "Você pode usar `/criarficha` para criar uma nova.",
+        ephemeral=True
+    )
+    
+@bot.tree.command(
+    name="alterarficha",
+    description="Altera o HP e a Mana da sua ficha."
+)
+@app_commands.describe(
+    hp="Novo HP máximo",
+    mana="Nova Mana máxima"
+)
+async def alterarficha(
+    interaction: discord.Interaction,
+    hp: int,
+    mana: int
+):
+
+    user_id = interaction.user.id
+
+    cursor.execute(
+        "SELECT nome_personagem FROM fichas WHERE user_id = ?",
+        (user_id,)
+    )
+
+    ficha = cursor.fetchone()
+
+    if ficha is None:
+        await interaction.response.send_message(
+            "❌ Você ainda não possui uma ficha.",
+            ephemeral=True
+        )
+        return
+
+    if hp <= 0:
+        await interaction.response.send_message(
+            "❌ O HP precisa ser maior que 0.",
+            ephemeral=True
+        )
+        return
+
+    if mana < 0:
+        await interaction.response.send_message(
+            "❌ A Mana não pode ser negativa.",
+            ephemeral=True
+        )
+        return
+
+    cursor.execute("""
+        UPDATE fichas
+        SET hp_atual = ?,
+            hp_max = ?,
+            mana_atual = ?,
+            mana_max = ?
+        WHERE user_id = ?
+    """, (hp, hp, mana, mana, user_id))
+
+    db.commit()
+
+    await interaction.response.send_message(
+        f"✅ Ficha atualizada!\n\n"
+        f"❤️ HP: **{hp}/{hp}**\n"
+        f"💧 Mana: **{mana}/{mana}**",
+        ephemeral=True
+    )
 # =========================
 # INICIAR BOT
 # =========================
