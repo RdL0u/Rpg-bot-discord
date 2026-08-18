@@ -595,7 +595,64 @@ async def addxp(
         f"⭐ XP atual: **{xp_atual}**",
         ephemeral=True
     )
+@bot.tree.command(
+    name="recuperarmana",
+    description="Recupera Mana do seu personagem."
+)
+@app_commands.describe(
+    valor="Quantidade de Mana recuperada"
+)
+async def recuperarmana(
+    interaction: discord.Interaction,
+    valor: int
+):
 
+    user_id = interaction.user.id
+
+    cursor.execute("""
+        SELECT mana_atual, mana_max
+        FROM fichas
+        WHERE user_id = ?
+    """, (user_id,))
+
+    dados = cursor.fetchone()
+
+    if dados is None:
+        await interaction.response.send_message(
+            "❌ Você ainda não possui uma ficha.",
+            ephemeral=True
+        )
+        return
+
+    if valor <= 0:
+        await interaction.response.send_message(
+            "❌ A recuperação precisa ser maior que 0.",
+            ephemeral=True
+        )
+        return
+
+    mana_atual, mana_max = dados
+
+    nova_mana = min(
+        mana_max,
+        mana_atual + valor
+    )
+
+    recuperado = nova_mana - mana_atual
+
+    cursor.execute("""
+        UPDATE fichas
+        SET mana_atual = ?
+        WHERE user_id = ?
+    """, (nova_mana, user_id))
+
+    db.commit()
+
+    await interaction.response.send_message(
+        f"💧 Você recuperou **{recuperado} de Mana**!\n"
+        f"💧 Mana: **{nova_mana}/{mana_max}**",
+        ephemeral=True
+    )
 # ==================================================
 # INICIAR BOT
 # ==================================================
