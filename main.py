@@ -474,6 +474,114 @@ async def alterarficha(
         f"💧 Mana: **{mana}/{mana}**",
         ephemeral=True
     )
+    @bot.tree.command(
+    name="dano",
+    description="Causa dano ao seu personagem."
+)
+@app_commands.describe(
+    valor="Quantidade de dano recebido"
+)
+async def dano(
+    interaction: discord.Interaction,
+    valor: int
+):
+
+    user_id = interaction.user.id
+
+    cursor.execute("""
+        SELECT hp_atual, hp_max
+        FROM fichas
+        WHERE user_id = ?
+    """, (user_id,))
+
+    ficha = cursor.fetchone()
+
+    if ficha is None:
+        await interaction.response.send_message(
+            "❌ Você ainda não possui uma ficha.",
+            ephemeral=True
+        )
+        return
+
+    if valor <= 0:
+        await interaction.response.send_message(
+            "❌ O dano precisa ser maior que 0.",
+            ephemeral=True
+        )
+        return
+
+    hp_atual, hp_max = ficha
+
+    novo_hp = max(0, hp_atual - valor)
+
+    cursor.execute("""
+        UPDATE fichas
+        SET hp_atual = ?
+        WHERE user_id = ?
+    """, (novo_hp, user_id))
+
+    db.commit()
+
+    await interaction.response.send_message(
+        f"💥 Você recebeu **{valor} de dano**!\n"
+        f"❤️ HP: **{novo_hp}/{hp_max}**",
+        ephemeral=True
+    )
+    @bot.tree.command(
+    name="cura",
+    description="Cura seu personagem."
+)
+@app_commands.describe(
+    valor="Quantidade de HP recuperado"
+)
+async def cura(
+    interaction: discord.Interaction,
+    valor: int
+):
+
+    user_id = interaction.user.id
+
+    cursor.execute("""
+        SELECT hp_atual, hp_max
+        FROM fichas
+        WHERE user_id = ?
+    """, (user_id,))
+
+    ficha = cursor.fetchone()
+
+    if ficha is None:
+        await interaction.response.send_message(
+            "❌ Você ainda não possui uma ficha.",
+            ephemeral=True
+        )
+        return
+
+    if valor <= 0:
+        await interaction.response.send_message(
+            "❌ A cura precisa ser maior que 0.",
+            ephemeral=True
+        )
+        return
+
+    hp_atual, hp_max = ficha
+
+    novo_hp = min(hp_max, hp_atual + valor)
+
+    recuperado = novo_hp - hp_atual
+
+    cursor.execute("""
+        UPDATE fichas
+        SET hp_atual = ?
+        WHERE user_id = ?
+    """, (novo_hp, user_id))
+
+    db.commit()
+
+    await interaction.response.send_message(
+        f"💚 Você recuperou **{recuperado} de HP**!\n"
+        f"❤️ HP: **{novo_hp}/{hp_max}**",
+        ephemeral=True
+    )
 # =========================
 # INICIAR BOT
 # =========================
