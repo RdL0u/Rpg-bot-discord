@@ -1,4 +1,4 @@
-
+```python
 import os
 import sqlite3
 import discord
@@ -7,22 +7,48 @@ from discord import app_commands
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 
-# Banco de dados
+# =========================
+# BANCO DE DADOS
+# =========================
+
 db = sqlite3.connect("fichas.db")
 cursor = db.cursor()
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS fichas (
     user_id INTEGER PRIMARY KEY,
-    hp_atual INTEGER DEFAULT 100,
-    hp_max INTEGER DEFAULT 100,
-    mana_atual INTEGER DEFAULT 100,
-    mana_max INTEGER DEFAULT 100,
-    xp INTEGER DEFAULT 0
+    nome_personagem TEXT NOT NULL DEFAULT 'Sem nome',
+    hp_atual INTEGER NOT NULL DEFAULT 100,
+    hp_max INTEGER NOT NULL DEFAULT 100,
+    mana_atual INTEGER NOT NULL DEFAULT 100,
+    mana_max INTEGER NOT NULL DEFAULT 100,
+    xp INTEGER NOT NULL DEFAULT 0
 )
 """)
 
 db.commit()
+
+# =========================
+# COMPATIBILIDADE COM BANCO ANTIGO
+# =========================
+
+# Se você já tinha criado fichas antes desta atualização,
+# adicionamos a nova coluna automaticamente.
+
+cursor.execute("PRAGMA table_info(fichas)")
+colunas = [coluna[1] for coluna in cursor.fetchall()]
+
+if "nome_personagem" not in colunas:
+    cursor.execute("""
+        ALTER TABLE fichas
+        ADD COLUMN nome_personagem TEXT NOT NULL DEFAULT 'Sem nome'
+    """)
+    db.commit()
+
+
+# =========================
+# BOT
+# =========================
 
 intents = discord.Intents.default()
 
@@ -32,83 +58,148 @@ bot = commands.Bot(
 )
 
 
-def criar_ficha(user_id):
-    cursor.execute(
-        "SELECT user_id FROM fichas WHERE user_id = ?",
-        (user_id,)
-    )
-
-    if cursor.fetchone() is None:
-        cursor.execute("""
-        INSERT INTO fichas
-        (user_id, hp_atual, hp_max, mana_atual, mana_max, xp)
-        VALUES (?, 100, 100, 100, 100, 0)
-        """, (user_id,))
-
-        db.commit()
-
+# =========================
+# INICIALIZAÇÃO
+# =========================
 
 @bot.event
 async def on_ready():
-    print(f"Bot conectado: {bot.user}")
+    print(f"Bot conectado como {bot.user}")
 
     try:
         comandos = await bot.tree.sync()
         print(f"{len(comandos)} comandos sincronizados.")
     except Exception as erro:
-        print(f"Erro: {erro}")
+        print(f"Erro ao sincronizar comandos: {erro}")
 
+
+# =========================
+# COMANDO /CRIARFICHA
+# =========================
 
 @bot.tree.command(
     name="criarficha",
     description="Cria sua ficha de personagem."
 )
-async def criarficha(interaction: discord.Interaction):
+@app_commands.describe(
+    nome="Nome do seu personagem",
+    hp="Quantidade de HP inicial",
+    mana="Quantidade de Mana inicial"
+)
+async def criarficha(
+    interaction: discord.Interaction,
+    nome: str,
+    hp: int,
+    mana: int
+):
 
     user_id = interaction.user.id
 
+    # Impede valores inválidos
+    if hp <= 0:
+        await interaction.response.send_message(
+            "❌ O HP inicial precisa ser maior que 0.",
+            ephemeral=True
+        )
+        return
+
+    if mana < 0:
+        await interaction.response.send_message(
+            "❌ A Mana inicial não pode ser negativa.",
+            ephemeral=True
+        )
+        return
+
+    # Verifica se o jogador já possui ficha
     cursor.execute(
         "SELECT user_id FROM fichas WHERE user_id = ?",
         (user_id,)
     )
 
-    if cursor.fetchone():
+    if cursor.fetchone() is not None:
         await interaction.response.send_message(
-            "⚠️ Você já possui uma ficha!",
+            "⚠️ Você já possui uma ficha.",
             ephemeral=True
         )
         return
 
-    criar_ficha(user_id)
+    # Limita o nome para evitar fichas exageradamente grandes
+    nome = nome[:50]
+
+    # Cria a ficha
+    cursor.execute("""
+        INSERT INTO fichas
+        (
+            user_id,
+            nome_personagem,
+            hp_atual,
+            hp_max,
+            mana_atual,
+            mana_max,
+            xp
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 0)
+    """, (
+        user_id,
+        nome,
+        hp,
+        hp,
+        mana,
+        mana
+    ))
+
+    db.commit()
 
     await interaction.response.send_message(
-        "✅ Ficha criada com sucesso!\n"
-        "Use `/ficha` para visualizar.",
+        f"✅ Ficha criada com sucesso!\n\n"
+        f"👤 **Personagem:** {nome}\n"
+        f"❤️ **HP:** {hp}/{hp}\n"
+        f"💧 **Mana:** {mana}/{mana}\n"
+        f"⭐ **XP:** 0",
         ephemeral=True
     )
 
 
+# =========================
+# COMANDO /FICHA
+# =========================
+
 @bot.tree.command(
     name="ficha",
-    description="Mostra sua ficha."
+    description="Mostra sua ficha de personagem."
 )
 async def ficha(interaction: discord.Interaction):
 
     user_id = interaction.user.id
 
-    criar_ficha(user_id)
-
     cursor.execute("""
-    SELECT hp_atual, hp_max, mana_atual, mana_max, xp
-    FROM fichas
-    WHERE user_id = ?
+        SELECT
+            nome_personagem,
+            hp_atual,
+            hp_max,
+            mana_atual,
+            mana_max,
+            xp
+        FROM fichas
+        WHERE user_id = ?
     """, (user_id,))
 
-    hp, hp_max, mana, mana_max, xp = cursor.fetchone()
+    dados = cursor.fetchone()
+
+    if dados is None:
+        await interaction.response.send_message(
+            "❌ Você ainda não possui uma ficha.\n"
+            "Use `/criarficha` para criar uma.",
+            ephemeral=True
+        )
+        return
+
+    nome, hp, hp_max, mana, mana_max, xp = dados
 
     embed = discord.Embed(
-        title=f"📜 Ficha de {interaction.user.display_name}",
-        color=discord.Color.red()
+        title=f"📜 {nome}",
+        description=f"Ficha de {interaction.user.display_name}",
+        color=discord.Color.dark_red()
     )
 
     embed.add_field(
@@ -135,11 +226,17 @@ async def ficha(interaction: discord.Interaction):
     )
 
 
+# =========================
+# COMANDO /SETHP
+# =========================
+
 @bot.tree.command(
     name="sethp",
-    description="Altera seu HP."
+    description="Altera seu HP atual."
 )
-@app_commands.describe(valor="Novo HP")
+@app_commands.describe(
+    valor="Novo valor de HP"
+)
 async def sethp(
     interaction: discord.Interaction,
     valor: int
@@ -147,27 +244,46 @@ async def sethp(
 
     user_id = interaction.user.id
 
-    criar_ficha(user_id)
+    cursor.execute(
+        "SELECT user_id FROM fichas WHERE user_id = ?",
+        (user_id,)
+    )
+
+    if cursor.fetchone() is None:
+        await interaction.response.send_message(
+            "❌ Você ainda não possui uma ficha.",
+            ephemeral=True
+        )
+        return
+
+    if valor < 0:
+        valor = 0
 
     cursor.execute("""
-    UPDATE fichas
-    SET hp_atual = ?
-    WHERE user_id = ?
-    """, (max(0, valor), user_id))
+        UPDATE fichas
+        SET hp_atual = ?
+        WHERE user_id = ?
+    """, (valor, user_id))
 
     db.commit()
 
     await interaction.response.send_message(
-        f"❤️ HP alterado para **{max(0, valor)}**.",
+        f"❤️ Seu HP agora é **{valor}**.",
         ephemeral=True
     )
 
 
+# =========================
+# COMANDO /SETMANA
+# =========================
+
 @bot.tree.command(
     name="setmana",
-    description="Altera sua Mana."
+    description="Altera sua Mana atual."
 )
-@app_commands.describe(valor="Nova Mana")
+@app_commands.describe(
+    valor="Novo valor de Mana"
+)
 async def setmana(
     interaction: discord.Interaction,
     valor: int
@@ -175,27 +291,46 @@ async def setmana(
 
     user_id = interaction.user.id
 
-    criar_ficha(user_id)
+    cursor.execute(
+        "SELECT user_id FROM fichas WHERE user_id = ?",
+        (user_id,)
+    )
+
+    if cursor.fetchone() is None:
+        await interaction.response.send_message(
+            "❌ Você ainda não possui uma ficha.",
+            ephemeral=True
+        )
+        return
+
+    if valor < 0:
+        valor = 0
 
     cursor.execute("""
-    UPDATE fichas
-    SET mana_atual = ?
-    WHERE user_id = ?
-    """, (max(0, valor), user_id))
+        UPDATE fichas
+        SET mana_atual = ?
+        WHERE user_id = ?
+    """, (valor, user_id))
 
     db.commit()
 
     await interaction.response.send_message(
-        f"💧 Mana alterada para **{max(0, valor)}**.",
+        f"💧 Sua Mana agora é **{valor}**.",
         ephemeral=True
     )
 
+
+# =========================
+# COMANDO /ADDXP
+# =========================
 
 @bot.tree.command(
     name="addxp",
     description="Adiciona XP à sua ficha."
 )
-@app_commands.describe(valor="Quantidade de XP")
+@app_commands.describe(
+    valor="Quantidade de XP recebida"
+)
 async def addxp(
     interaction: discord.Interaction,
     valor: int
@@ -203,19 +338,29 @@ async def addxp(
 
     user_id = interaction.user.id
 
-    criar_ficha(user_id)
+    cursor.execute(
+        "SELECT user_id FROM fichas WHERE user_id = ?",
+        (user_id,)
+    )
 
-    if valor < 0:
+    if cursor.fetchone() is None:
         await interaction.response.send_message(
-            "❌ O XP não pode ser negativo.",
+            "❌ Você ainda não possui uma ficha.",
+            ephemeral=True
+        )
+        return
+
+    if valor <= 0:
+        await interaction.response.send_message(
+            "❌ O XP adicionado precisa ser maior que 0.",
             ephemeral=True
         )
         return
 
     cursor.execute("""
-    UPDATE fichas
-    SET xp = xp + ?
-    WHERE user_id = ?
+        UPDATE fichas
+        SET xp = xp + ?
+        WHERE user_id = ?
     """, (valor, user_id))
 
     db.commit()
@@ -225,18 +370,23 @@ async def addxp(
         (user_id,)
     )
 
-    xp = cursor.fetchone()[0]
+    xp_atual = cursor.fetchone()[0]
 
     await interaction.response.send_message(
         f"⭐ Você recebeu **{valor} XP**!\n"
-        f"XP atual: **{xp}**",
+        f"XP atual: **{xp_atual}**",
         ephemeral=True
     )
 
 
+# =========================
+# INICIAR BOT
+# =========================
+
 if not TOKEN:
     raise RuntimeError(
-        "DISCORD_TOKEN não configurado."
+        "DISCORD_TOKEN não foi configurado."
     )
 
 bot.run(TOKEN)
+```
