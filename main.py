@@ -230,16 +230,43 @@ def estado_recurso(atual, maximo):
 
 
 def mostrar_hp(atual, maximo):
-    return (
-        f"**{atual}/{maximo}** — "
-        f"{estado_recurso(atual, maximo)}"
+    estado = estado_recurso(atual, maximo)
+
+    simbolos = {
+        "BOM": "🟢",
+        "BAIXO": "🟡",
+        "CRÍTICO": "🔴",
+        "ZERADO": "⚫"
+    }
+
+    simbolo = simbolos.get(
+        estado,
+        "⚪"
     )
 
+    return (
+        f"{simbolo} **{atual}/{maximo}** — "
+        f"**{estado}**"
+    )
 
 def mostrar_mana(atual, maximo):
+    estado = estado_recurso(atual, maximo)
+
+    simbolos = {
+        "BOM": "🔵",
+        "BAIXO": "🟡",
+        "CRÍTICO": "🔴",
+        "ZERADO": "⚫"
+    }
+
+    simbolo = simbolos.get(
+        estado,
+        "⚪"
+    )
+
     return (
-        f"**{atual}/{maximo}** — "
-        f"{estado_recurso(atual, maximo)}"
+        f"{simbolo} **{atual}/{maximo}** — "
+        f"**{estado}**"
     )
 # ============================================================
 # PERMISSÕES DE ALTERAÇÃO
@@ -999,12 +1026,12 @@ class ValorModal(discord.ui.Modal):
                 db.commit()
 
                 await interaction.response.send_message(
-                    f"💥 **{interaction.user.display_name}** "
-                    f"causou **{valor} de dano** em "
-                    f"**{f['nome']}**!\n\n"
-                    f"💀 **{f['nome']} morreu!**\n"
-                    f"🗑️ A ficha do NPC foi apagada."
-                )
+    f"💥 **{interaction.user.display_name}** "
+    f"causou **{valor} de dano** em "
+    f"**{f['nome']}**!\n\n"
+    f"💀 **{f['nome']} morreu!**\n"
+    f"❤️ HP: **0/{f['hp_max']}** — 💀 **MORTO**"
+)
 
                 return
 
