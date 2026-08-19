@@ -43,16 +43,28 @@ bot = commands.Bot(
 )
 
 # ==================================================
-# VERIFICAR PERMISSÃO
+# VERIFICAR ADMINISTRADOR
+# ==================================================
+
+def eh_admin(interaction):
+
+    return (
+        interaction.guild is not None
+        and interaction.user.guild_permissions.administrator
+    )
+
+
+# ==================================================
+# VERIFICAR SE PODE ALTERAR A FICHA
 # ==================================================
 
 def pode_alterar(interaction, jogador_id):
 
     # Administrador pode alterar qualquer ficha
-    if interaction.guild and interaction.user.guild_permissions.administrator:
+    if eh_admin(interaction):
         return True
 
-    # Jogador pode alterar somente a própria ficha
+    # Jogador comum só pode alterar a própria ficha
     if interaction.user.id == jogador_id:
         return True
 
@@ -69,11 +81,18 @@ async def on_ready():
     print(f"Bot conectado como {bot.user}")
 
     try:
+
         comandos = await bot.tree.sync()
-        print(f"{len(comandos)} comandos sincronizados.")
+
+        print(
+            f"{len(comandos)} comandos sincronizados."
+        )
 
     except Exception as erro:
-        print(f"Erro ao sincronizar comandos: {erro}")
+
+        print(
+            f"Erro ao sincronizar comandos: {erro}"
+        )
 
 
 # ==================================================
@@ -109,6 +128,7 @@ async def criarficha(
             "⚠️ Você já possui uma ficha.",
             ephemeral=True
         )
+
         return
 
     if hp <= 0:
@@ -117,6 +137,7 @@ async def criarficha(
             "❌ O HP precisa ser maior que 0.",
             ephemeral=True
         )
+
         return
 
     if mana < 0:
@@ -125,6 +146,7 @@ async def criarficha(
             "❌ A Mana não pode ser negativa.",
             ephemeral=True
         )
+
         return
 
     nome = nome[:50]
@@ -186,7 +208,7 @@ async def criarficha(
 
 
 # ==================================================
-# MOSTRAR FICHA
+# MOSTRAR PRÓPRIA FICHA
 # ==================================================
 
 @bot.tree.command(
@@ -214,9 +236,11 @@ async def ficha(interaction: discord.Interaction):
     if dados is None:
 
         await interaction.response.send_message(
-            "❌ Você ainda não possui uma ficha.",
+            "❌ Você ainda não possui uma ficha.\n"
+            "Use `/criarficha` para criar uma.",
             ephemeral=True
         )
+
         return
 
     nome, hp, hp_max, mana, mana_max, xp = dados
@@ -229,13 +253,13 @@ async def ficha(interaction: discord.Interaction):
 
     embed.add_field(
         name="❤️ HP",
-        value=f"{hp}/{hp_max}",
+        value=f"{hp_max}/{hp}",
         inline=True
     )
 
     embed.add_field(
         name="💧 Mana",
-        value=f"{mana}/{mana_max}",
+        value=f"{mana_max}/{mana}",
         inline=True
     )
 
@@ -256,7 +280,7 @@ async def ficha(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="fichas",
-    description="Mostra todas as fichas."
+    description="Mostra todas as fichas dos jogadores."
 )
 async def fichas(interaction: discord.Interaction):
 
@@ -280,6 +304,7 @@ async def fichas(interaction: discord.Interaction):
         await interaction.response.send_message(
             "📜 Ainda não existem fichas."
         )
+
         return
 
     embed = discord.Embed(
@@ -287,7 +312,15 @@ async def fichas(interaction: discord.Interaction):
         color=discord.Color.dark_red()
     )
 
-    for nome, hp, hp_max, mana, mana_max, xp, user_id in dados:
+    for (
+        nome,
+        hp,
+        hp_max,
+        mana,
+        mana_max,
+        xp,
+        user_id
+    ) in dados:
 
         membro = interaction.guild.get_member(user_id)
 
@@ -300,8 +333,8 @@ async def fichas(interaction: discord.Interaction):
             name=f"👤 {nome}",
             value=(
                 f"Jogador: {jogador}\n"
-                f"❤️ HP: **{hp}/{hp_max}**\n"
-                f"💧 Mana: **{mana}/{mana_max}**\n"
+                f"❤️ HP: **{hp_max}/{hp}**\n"
+                f"💧 Mana: **{mana_max}/{mana}**\n"
                 f"⭐ XP: **{xp}**"
             ),
             inline=False
@@ -337,6 +370,7 @@ async def apagarficha(interaction: discord.Interaction):
             "❌ Você não possui uma ficha.",
             ephemeral=True
         )
+
         return
 
     nome = ficha[0]
@@ -360,7 +394,7 @@ async def apagarficha(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="alterarficha",
-    description="Altera o HP e a Mana da ficha."
+    description="Altera o HP e a Mana máximos de uma ficha."
 )
 @app_commands.describe(
     jogador="Jogador da ficha",
@@ -376,12 +410,16 @@ async def alterarficha(
 
     user_id = jogador.id
 
-    if not pode_alterar(interaction, user_id):
+    if not pode_alterar(
+        interaction,
+        user_id
+    ):
 
         await interaction.response.send_message(
-            "❌ Você só pode alterar a sua própria ficha.",
+            "❌ Você só pode alterar sua própria ficha.",
             ephemeral=True
         )
+
         return
 
     if hp <= 0:
@@ -390,6 +428,7 @@ async def alterarficha(
             "❌ O HP precisa ser maior que 0.",
             ephemeral=True
         )
+
         return
 
     if mana < 0:
@@ -398,6 +437,7 @@ async def alterarficha(
             "❌ A Mana não pode ser negativa.",
             ephemeral=True
         )
+
         return
 
     cursor.execute(
@@ -413,6 +453,7 @@ async def alterarficha(
             "❌ Esse jogador não possui uma ficha.",
             ephemeral=True
         )
+
         return
 
     cursor.execute("""
@@ -442,11 +483,12 @@ async def alterarficha(
 
 # ==================================================
 # DANO
+# QUALQUER JOGADOR PODE CAUSAR DANO
 # ==================================================
 
 @bot.tree.command(
     name="dano",
-    description="Causa dano a um jogador."
+    description="Causa dano a qualquer jogador."
 )
 @app_commands.describe(
     jogador="Jogador que receberá o dano",
@@ -460,24 +502,20 @@ async def dano(
 
     user_id = jogador.id
 
-    if not pode_alterar(interaction, user_id):
-
-        await interaction.response.send_message(
-            "❌ Você só pode alterar a própria ficha.",
-            ephemeral=True
-        )
-        return
-
     if valor <= 0:
 
         await interaction.response.send_message(
             "❌ O dano precisa ser maior que 0.",
             ephemeral=True
         )
+
         return
 
     cursor.execute("""
-        SELECT nome_personagem, hp_atual, hp_max
+        SELECT
+            nome_personagem,
+            hp_atual,
+            hp_max
         FROM fichas
         WHERE user_id = ?
     """, (user_id,))
@@ -490,6 +528,7 @@ async def dano(
             "❌ Esse jogador não possui uma ficha.",
             ephemeral=True
         )
+
         return
 
     nome, hp_atual, hp_max = dados
@@ -503,27 +542,32 @@ async def dano(
         UPDATE fichas
         SET hp_atual = ?
         WHERE user_id = ?
-    """, (novo_hp, user_id))
+    """, (
+        novo_hp,
+        user_id
+    ))
 
     db.commit()
 
     await interaction.response.send_message(
-        f"💥 **{nome}** recebeu **{valor} de dano**!\n"
-        f"❤️ HP: **{novo_hp}/{hp_max}**"
+        f"💥 **{interaction.user.display_name}** "
+        f"causou **{valor} de dano** em **{nome}**!\n"
+        f"❤️ HP: **{hp_max}/{novo_hp}**"
     )
 
 
 # ==================================================
 # CURA
+# QUALQUER JOGADOR PODE CURAR QUALQUER FICHA
 # ==================================================
 
 @bot.tree.command(
     name="cura",
-    description="Cura um jogador."
+    description="Cura qualquer jogador."
 )
 @app_commands.describe(
     jogador="Jogador que será curado",
-    valor="Quantidade de cura"
+    valor="Quantidade de HP recuperado"
 )
 async def cura(
     interaction: discord.Interaction,
@@ -533,24 +577,20 @@ async def cura(
 
     user_id = jogador.id
 
-    if not pode_alterar(interaction, user_id):
-
-        await interaction.response.send_message(
-            "❌ Você só pode alterar a própria ficha.",
-            ephemeral=True
-        )
-        return
-
     if valor <= 0:
 
         await interaction.response.send_message(
             "❌ A cura precisa ser maior que 0.",
             ephemeral=True
         )
+
         return
 
     cursor.execute("""
-        SELECT nome_personagem, hp_atual, hp_max
+        SELECT
+            nome_personagem,
+            hp_atual,
+            hp_max
         FROM fichas
         WHERE user_id = ?
     """, (user_id,))
@@ -563,6 +603,7 @@ async def cura(
             "❌ Esse jogador não possui uma ficha.",
             ephemeral=True
         )
+
         return
 
     nome, hp_atual, hp_max = dados
@@ -578,18 +619,23 @@ async def cura(
         UPDATE fichas
         SET hp_atual = ?
         WHERE user_id = ?
-    """, (novo_hp, user_id))
+    """, (
+        novo_hp,
+        user_id
+    ))
 
     db.commit()
 
     await interaction.response.send_message(
-        f"💚 **{nome}** recuperou **{recuperado} de HP**!\n"
-        f"❤️ HP: **{novo_hp}/{hp_max}**"
+        f"💚 **{interaction.user.display_name}** "
+        f"curou **{nome}** em **{recuperado} de HP**!\n"
+        f"❤️ HP: **{hp_max}/{novo_hp}**"
     )
 
 
 # ==================================================
 # GASTAR MANA
+# PRÓPRIO JOGADOR OU ADMINISTRADOR
 # ==================================================
 
 @bot.tree.command(
@@ -608,12 +654,17 @@ async def gastarmana(
 
     user_id = jogador.id
 
-    if not pode_alterar(interaction, user_id):
+    if not pode_alterar(
+        interaction,
+        user_id
+    ):
 
         await interaction.response.send_message(
-            "❌ Você só pode alterar a própria ficha.",
+            "❌ Você só pode alterar sua própria Mana. "
+            "Somente administradores podem alterar a Mana de outros jogadores.",
             ephemeral=True
         )
+
         return
 
     if valor <= 0:
@@ -622,10 +673,14 @@ async def gastarmana(
             "❌ O gasto precisa ser maior que 0.",
             ephemeral=True
         )
+
         return
 
     cursor.execute("""
-        SELECT nome_personagem, mana_atual, mana_max
+        SELECT
+            nome_personagem,
+            mana_atual,
+            mana_max
         FROM fichas
         WHERE user_id = ?
     """, (user_id,))
@@ -638,6 +693,7 @@ async def gastarmana(
             "❌ Esse jogador não possui uma ficha.",
             ephemeral=True
         )
+
         return
 
     nome, mana_atual, mana_max = dados
@@ -646,9 +702,10 @@ async def gastarmana(
 
         await interaction.response.send_message(
             f"❌ **{nome}** não possui Mana suficiente!\n"
-            f"💧 Mana: **{mana_atual}/{mana_max}**",
+            f"💧 Mana: **{mana_max}/{mana_atual}**",
             ephemeral=True
         )
+
         return
 
     nova_mana = mana_atual - valor
@@ -657,18 +714,22 @@ async def gastarmana(
         UPDATE fichas
         SET mana_atual = ?
         WHERE user_id = ?
-    """, (nova_mana, user_id))
+    """, (
+        nova_mana,
+        user_id
+    ))
 
     db.commit()
 
     await interaction.response.send_message(
         f"🔮 **{nome}** gastou **{valor} de Mana**!\n"
-        f"💧 Mana: **{nova_mana}/{mana_max}**"
+        f"💧 Mana: **{mana_max}/{nova_mana}**"
     )
 
 
 # ==================================================
 # RECUPERAR MANA
+# PRÓPRIO JOGADOR OU ADMINISTRADOR
 # ==================================================
 
 @bot.tree.command(
@@ -687,12 +748,17 @@ async def recuperarmana(
 
     user_id = jogador.id
 
-    if not pode_alterar(interaction, user_id):
+    if not pode_alterar(
+        interaction,
+        user_id
+    ):
 
         await interaction.response.send_message(
-            "❌ Você só pode alterar a própria ficha.",
+            "❌ Você só pode alterar sua própria Mana. "
+            "Somente administradores podem alterar a Mana de outros jogadores.",
             ephemeral=True
         )
+
         return
 
     if valor <= 0:
@@ -701,10 +767,14 @@ async def recuperarmana(
             "❌ A recuperação precisa ser maior que 0.",
             ephemeral=True
         )
+
         return
 
     cursor.execute("""
-        SELECT nome_personagem, mana_atual, mana_max
+        SELECT
+            nome_personagem,
+            mana_atual,
+            mana_max
         FROM fichas
         WHERE user_id = ?
     """, (user_id,))
@@ -717,6 +787,7 @@ async def recuperarmana(
             "❌ Esse jogador não possui uma ficha.",
             ephemeral=True
         )
+
         return
 
     nome, mana_atual, mana_max = dados
@@ -732,18 +803,22 @@ async def recuperarmana(
         UPDATE fichas
         SET mana_atual = ?
         WHERE user_id = ?
-    """, (nova_mana, user_id))
+    """, (
+        nova_mana,
+        user_id
+    ))
 
     db.commit()
 
     await interaction.response.send_message(
         f"💧 **{nome}** recuperou **{recuperado} de Mana**!\n"
-        f"💧 Mana: **{nova_mana}/{mana_max}**"
+        f"💧 Mana: **{mana_max}/{nova_mana}**"
     )
 
 
 # ==================================================
 # ADICIONAR XP
+# PRÓPRIO JOGADOR OU ADMINISTRADOR
 # ==================================================
 
 @bot.tree.command(
@@ -762,12 +837,17 @@ async def addxp(
 
     user_id = jogador.id
 
-    if not pode_alterar(interaction, user_id):
+    if not pode_alterar(
+        interaction,
+        user_id
+    ):
 
         await interaction.response.send_message(
-            "❌ Você só pode alterar o XP da sua própria ficha.",
+            "❌ Você só pode alterar o XP da sua própria ficha. "
+            "Somente administradores podem alterar o XP de outros jogadores.",
             ephemeral=True
         )
+
         return
 
     if valor <= 0:
@@ -776,6 +856,7 @@ async def addxp(
             "❌ O XP precisa ser maior que 0.",
             ephemeral=True
         )
+
         return
 
     cursor.execute(
@@ -791,13 +872,17 @@ async def addxp(
             "❌ Esse jogador não possui uma ficha.",
             ephemeral=True
         )
+
         return
 
     cursor.execute("""
         UPDATE fichas
         SET xp = xp + ?
         WHERE user_id = ?
-    """, (valor, user_id))
+    """, (
+        valor,
+        user_id
+    ))
 
     db.commit()
 
