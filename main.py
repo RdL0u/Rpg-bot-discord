@@ -1981,7 +1981,7 @@ async def alternpc(
 
 @bot.tree.command(
     name="apagarnpc",
-    description="Apaga um NPC."
+    description="Apaga um NPC deste canal."
 )
 @app_commands.describe(
     nome="Nome exato do NPC"
@@ -1991,19 +1991,21 @@ async def apagarnpc(
     nome: str
 ):
 
+    # Verifica se é o Mestre ou administrador
     if (
         not eh_mestre(interaction)
         and not eh_admin(interaction)
     ):
 
         await interaction.response.send_message(
-            "❌ Somente o Mestre pode "
-            "apagar NPCs.",
+            "❌ Somente o Mestre ou um administrador "
+            "pode apagar NPCs.",
             ephemeral=True
         )
 
         return
 
+    # Procura o NPC neste canal
     cursor.execute("""
         SELECT id
         FROM fichas
@@ -2018,15 +2020,18 @@ async def apagarnpc(
 
     resultado = cursor.fetchone()
 
+    # NPC não encontrado
     if resultado is None:
 
         await interaction.response.send_message(
-            "❌ NPC não encontrado.",
+            f"❌ Não encontrei um NPC chamado "
+            f"**{nome}** neste canal.",
             ephemeral=True
         )
 
         return
 
+    # Apaga o NPC
     cursor.execute(
         "DELETE FROM fichas WHERE id = ?",
         (resultado[0],)
@@ -2034,12 +2039,12 @@ async def apagarnpc(
 
     db.commit()
 
+    # Confirmação
     await interaction.response.send_message(
         f"🗑️ O NPC **{nome}** foi apagado."
-
-        # ============================================================
+    )
+    # ============================================================
 # INICIAR O BOT
 # ============================================================
 
 bot.run(TOKEN)
-    )
