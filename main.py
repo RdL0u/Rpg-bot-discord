@@ -1162,63 +1162,7 @@ async def alterarficha(
         f"❤️ HP: **{hp}/{hp}**\n"
         f"🔵 Mana: **{mana}/{mana}**"
     )
-# ============================================================
-# VISUALIZAR NPCS — /NPC
-# ============================================================
 
-@bot.tree.command(
-    name="npc",
-    description="Mostra todos os NPCs da mesa."
-)
-async def npc(
-    interaction: discord.Interaction
-):
-
-    if (
-        not eh_mestre(interaction)
-        and not eh_admin(interaction)
-    ):
-
-        await interaction.response.send_message(
-            "❌ Somente o Mestre pode visualizar os NPCs.",
-            ephemeral=True
-        )
-
-        return
-
-    cursor.execute("""
-        SELECT *
-        FROM fichas
-        WHERE channel_id = ?
-        AND tipo = 'npc'
-        ORDER BY nome
-    """, (
-        interaction.channel.id,
-    ))
-
-    resultados = cursor.fetchall()
-
-    if not resultados:
-
-        await interaction.response.send_message(
-            "👹 Não existem NPCs neste canal.",
-            ephemeral=True
-        )
-
-        return
-
-    await interaction.response.send_message(
-        f"👹 **NPCs da mesa — {len(resultados)} encontrados**"
-    )
-
-    for dados in resultados:
-
-        f = transformar_ficha(dados)
-
-        await interaction.followup.send(
-            embed=criar_pagina_status(f),
-            view=FichaView(f)
-        )
 
 # ============================================================
 # APAGAR FICHA
@@ -2029,4 +1973,4 @@ async def help(
 # INICIAR BOT
 # ============================================================
 
-bot.run(TOKEN)
+bot.run(TOKEN) 
