@@ -2107,6 +2107,95 @@ async def verficha(
     await interaction.response.send_message(
         embed=embed
     )
+# ============================================================
+# COMANDO HELP
+# ============================================================
+
+@bot.tree.command(
+    name="help",
+    description="Mostra todos os comandos disponíveis."
+)
+async def help(
+    interaction: discord.Interaction
+):
+
+    embed = discord.Embed(
+        title="📖 Comandos do BotRPG",
+        description=(
+            "Confira abaixo os comandos disponíveis "
+            "para esta mesa."
+        ),
+        color=discord.Color.dark_red()
+    )
+
+    # --------------------------------------------------------
+    # COMANDOS DOS JOGADORES
+    # --------------------------------------------------------
+
+    embed.add_field(
+        name="👤 Jogador",
+        value=(
+            "`/criarficha` — Cria sua ficha.\n"
+            "`/ficha` — Mostra sua própria ficha.\n"
+            "`/verficha` — Mostra a ficha de outro jogador.\n"
+            "`/apagarficha` — Apaga sua ficha.\n"
+            "`/alterarficha` — Altera sua ficha.\n"
+            "`/gastarmana` — Gasta Mana da sua ficha.\n"
+            "`/dano` — Escolhe uma ficha para receber dano.\n"
+            "`/cura` — Escolhe uma ficha para receber cura.\n"
+            "`/recuperarmana` — Escolhe uma ficha para recuperar Mana.\n"
+            "`/addxp` — Adiciona XP à sua ficha."
+        ),
+        inline=False
+    )
+
+    # --------------------------------------------------------
+    # COMANDOS DO MESTRE
+    # --------------------------------------------------------
+
+    embed.add_field(
+        name="👑 Mestre",
+        value=(
+            "`/criarnpc` — Cria um NPC.\n"
+            "`/npcs` — Mostra os NPCs da mesa.\n"
+            "`/alternpc` — Altera um NPC.\n"
+            "`/apagarnpc` — Apaga um NPC.\n"
+            "`/passarmestre` — Passa o cargo de Mestre.\n"
+            "`/mestre` — Mostra quem é o Mestre."
+        ),
+        inline=False
+    )
+
+    # --------------------------------------------------------
+    # COMANDOS DO ADMINISTRADOR
+    # --------------------------------------------------------
+
+    embed.add_field(
+        name="🛡️ Administrador",
+        value=(
+            "`/definirmestre` — Define o Mestre do canal.\n"
+            "`/passarmestre` — Pode transferir o cargo de Mestre.\n"
+            "`/alterarficha` — Pode alterar fichas.\n"
+            "`/criarnpc` — Pode criar NPCs.\n"
+            "`/alternpc` — Pode alterar NPCs.\n"
+            "`/apagarnpc` — Pode apagar NPCs."
+        ),
+        inline=False
+    )
+
+    # --------------------------------------------------------
+    # INFORMAÇÕES
+    # --------------------------------------------------------
+
+    embed.set_footer(
+        text="BotRPG • Sistema de fichas"
+    )
+
+    await interaction.response.send_message(
+        embed=embed,
+        ephemeral=True
+    )
+
     # ============================================================
 # INICIAR O BOT
 # ============================================================
