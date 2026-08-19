@@ -22,13 +22,8 @@ if not TOKEN:
 # ============================================================
 
 db = sqlite3.connect("rpg_fichas.db")
-db.row_factory = sqlite3.Row
 cursor = db.cursor()
 
-
-# ============================================================
-# TABELA DE MESAS
-# ============================================================
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS mesas (
@@ -37,10 +32,6 @@ CREATE TABLE IF NOT EXISTS mesas (
 )
 """)
 
-
-# ============================================================
-# TABELA DE FICHAS
-# ============================================================
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS fichas (
@@ -98,8 +89,22 @@ db.commit()
 
 
 # ============================================================
-# MIGRAÇÃO DO BANCO
+# MIGRAÇÃO
 # ============================================================
+
+def adicionar_coluna_se_nao_existir(nome_coluna):
+    cursor.execute("PRAGMA table_info(fichas)")
+    colunas = [coluna[1] for coluna in cursor.fetchall()]
+
+    if nome_coluna not in colunas:
+        cursor.execute(
+            f"""
+            ALTER TABLE fichas
+            ADD COLUMN {nome_coluna} INTEGER NOT NULL DEFAULT 0
+            """
+        )
+        db.commit()
+
 
 COLUNAS_NOVAS = [
     "forca",
@@ -133,28 +138,6 @@ COLUNAS_NOVAS = [
     "esquiva",
     "furtividade"
 ]
-
-
-def adicionar_coluna_se_nao_existir(nome_coluna):
-
-    cursor.execute("PRAGMA table_info(fichas)")
-
-    colunas = [
-        coluna["name"]
-        for coluna in cursor.fetchall()
-    ]
-
-    if nome_coluna not in colunas:
-
-        cursor.execute(
-            f"""
-            ALTER TABLE fichas
-            ADD COLUMN {nome_coluna}
-            INTEGER NOT NULL DEFAULT 0
-            """
-        )
-
-        db.commit()
 
 
 for coluna in COLUNAS_NOVAS:
@@ -204,7 +187,7 @@ PERICIAS = {
     "ciencias": ("🧪", "Ciências"),
     "labia": ("💬", "Lábia"),
     "prontidao": ("👁️", "Prontidão"),
-    "conhecimentos_gerais": ("🌎", "Conhec. Gerais"),
+    "conhecimentos_gerais": ("🌎", "Conhecimentos Gerais"),
     "lideranca": ("👑", "Liderança"),
     "sobrevivencia": ("🏕️", "Sobrevivência"),
     "conducao": ("🚗", "Condução"),
@@ -222,11 +205,62 @@ ORDEM_PERICIAS = list(PERICIAS.keys())
 
 
 # ============================================================
+# COLUNAS DA FICHA
+# ============================================================
+
+COLUNAS_FICHA = [
+    "id",
+    "channel_id",
+    "dono_id",
+    "mestre_id",
+    "tipo",
+    "nome",
+    "hp_atual",
+    "hp_max",
+    "mana_atual",
+    "mana_max",
+    "xp",
+
+    "forca",
+    "destreza",
+    "vigor",
+    "inteligencia",
+    "carisma",
+    "raciocinio",
+
+    "academicos",
+    "idiomas",
+    "oficios",
+    "armas_brancas",
+    "intimidacao",
+    "ocultismo",
+    "briga",
+    "investigacao",
+    "persuasao",
+    "ciencias",
+    "labia",
+    "prontidao",
+    "conhecimentos_gerais",
+    "lideranca",
+    "sobrevivencia",
+    "conducao",
+    "manha",
+    "tecnologia",
+    "esportes",
+    "medicina",
+    "mira",
+    "esquiva",
+    "furtividade",
+
+    "aleatorio"
+]
+
+
+# ============================================================
 # FUNÇÕES AUXILIARES
 # ============================================================
 
 def garantir_mesa(channel_id):
-
     cursor.execute("""
         INSERT OR IGNORE INTO mesas (
             channel_id,
@@ -239,7 +273,6 @@ def garantir_mesa(channel_id):
 
 
 def obter_mestre(channel_id):
-
     cursor.execute("""
         SELECT mestre_id
         FROM mesas
@@ -249,13 +282,12 @@ def obter_mestre(channel_id):
     resultado = cursor.fetchone()
 
     if resultado:
-        return resultado["mestre_id"]
+        return resultado[0]
 
     return None
 
 
 def eh_admin(interaction):
-
     if interaction.guild is None:
         return False
 
@@ -263,22 +295,13 @@ def eh_admin(interaction):
 
 
 def eh_mestre(interaction):
-
     return (
         obter_mestre(interaction.channel.id)
         == interaction.user.id
     )
 
 
-# ============================================================
-# BUSCA DE FICHAS
-# ============================================================
-
-def buscar_ficha_jogador(
-    channel_id,
-    user_id
-):
-
+def buscar_ficha_jogador(channel_id, user_id):
     cursor.execute("""
         SELECT *
         FROM fichas
@@ -295,7 +318,6 @@ def buscar_ficha_jogador(
 
 
 def buscar_ficha(ficha_id):
-
     cursor.execute("""
         SELECT *
         FROM fichas
@@ -305,62 +327,51 @@ def buscar_ficha(ficha_id):
     return cursor.fetchone()
 
 
-def buscar_ficha_por_nome(
-    channel_id,
-    nome
-):
+def transformar_ficha(dados):
+    if dados is None:
+        return None
 
+    ficha = {}
+
+    for indice, coluna in enumerate(COLUNAS_FICHA):
+        if indice < len(dados):
+            ficha[coluna] = dados[indice]
+
+    return ficha
+
+
+def buscar_ficha_por_nome(channel_id, nome):
     cursor.execute("""
         SELECT *
         FROM fichas
         WHERE channel_id = ?
-        AND LOWER(nome) = LOWER(?)
+        AND nome = ?
         LIMIT 1
     """, (
         channel_id,
-        nome.strip()
+        nome
     ))
 
-    return cursor.fetchone()
+    resultado = cursor.fetchone()
+
+    return transformar_ficha(resultado)
 
 
-def transformar_ficha(dados):
+def buscar_ficha_por_id(channel_id, ficha_id):
+    cursor.execute("""
+        SELECT *
+        FROM fichas
+        WHERE channel_id = ?
+        AND id = ?
+        LIMIT 1
+    """, (
+        channel_id,
+        ficha_id
+    ))
 
-    if dados is None:
-        return None
+    resultado = cursor.fetchone()
 
-    return dict(dados)
-
-
-# ============================================================
-# PERMISSÃO PARA ALTERAR FICHA
-# ============================================================
-
-def pode_alterar_ficha(
-    interaction,
-    ficha
-):
-
-    if eh_admin(interaction):
-        return True
-
-    if ficha["tipo"] == "jogador":
-
-        return (
-            ficha["dono_id"]
-            == interaction.user.id
-            or eh_mestre(interaction)
-        )
-
-    if ficha["tipo"] == "npc":
-
-        return (
-            ficha["mestre_id"]
-            == interaction.user.id
-            or eh_mestre(interaction)
-        )
-
-    return False
+    return transformar_ficha(resultado)
 
 
 # ============================================================
@@ -368,32 +379,22 @@ def pode_alterar_ficha(
 # ============================================================
 
 def calcular_rc(ficha):
-
     return (
-        int(ficha["esquiva"])
-        + int(ficha["destreza"])
+        ficha["esquiva"]
+        + ficha["destreza"]
         + 5
     )
 
 
 # ============================================================
-# ESTADO DE RECURSOS
+# ESTADO DOS RECURSOS
 # ============================================================
 
-def estado_recurso(
-    atual,
-    maximo
-):
-
-    if maximo <= 0:
+def estado_recurso(atual, maximo):
+    if atual <= 0 or maximo <= 0:
         return "ZERADO"
 
-    if atual <= 0:
-        return "ZERADO"
-
-    percentual = (
-        atual / maximo
-    ) * 100
+    percentual = (atual / maximo) * 100
 
     if percentual >= 70:
         return "BOM"
@@ -404,247 +405,217 @@ def estado_recurso(
     return "CRÍTICO"
 
 
-def emoji_estado(
-    atual,
-    maximo,
-    tipo
-):
+def emoji_hp(atual, maximo):
+    estado = estado_recurso(atual, maximo)
 
-    estado = estado_recurso(
-        atual,
-        maximo
-    )
+    return {
+        "BOM": "🟢",
+        "BAIXO": "🟡",
+        "CRÍTICO": "🔴",
+        "ZERADO": "⚫"
+    }.get(estado, "⚪")
 
-    if tipo == "hp":
 
-        emojis = {
-            "BOM": "🟢",
-            "BAIXO": "🟡",
-            "CRÍTICO": "🔴",
-            "ZERADO": "⚫"
-        }
+def emoji_mana(atual, maximo):
+    estado = estado_recurso(atual, maximo)
 
-    else:
-
-        emojis = {
-            "BOM": "🔵",
-            "BAIXO": "🟡",
-            "CRÍTICO": "🔴",
-            "ZERADO": "⚫"
-        }
-
-    return emojis.get(
-        estado,
-        "⚪"
-    )
+    return {
+        "BOM": "🔵",
+        "BAIXO": "🟡",
+        "CRÍTICO": "🔴",
+        "ZERADO": "⚫"
+    }.get(estado, "⚪")
 
 
 # ============================================================
 # ALINHAMENTO AUTOMÁTICO
 # ============================================================
 
-def montar_duas_colunas(
-    esquerda,
-    direita,
-    largura=28
-):
+def alinhar_duas_colunas(itens):
+    """
+    Divide os itens em duas colunas e calcula
+    automaticamente o espaçamento da primeira coluna.
 
-    resultado = []
+    O valor da coluna nunca é usado para determinar
+    a chave da segunda coluna. Isso evita o erro
+    de alteração de perícias trocadas.
+    """
 
-    total = max(
-        len(esquerda),
-        len(direita)
-    )
+    linhas = []
 
-    for i in range(total):
+    metade = (len(itens) + 1) // 2
 
-        item_esquerda = (
-            esquerda[i]
-            if i < len(esquerda)
-            else ""
-        )
+    coluna_esquerda = itens[:metade]
+    coluna_direita = itens[metade:]
 
-        item_direita = (
-            direita[i]
-            if i < len(direita)
-            else ""
-        )
+    esquerda_formatada = []
 
-        resultado.append(
-            item_esquerda.ljust(
-                largura
-            )
-            + item_direita
-        )
-
-    return "\n".join(resultado)
-
-
-# ============================================================
-# STATUS EM 2 COLUNAS
-# ============================================================
-
-def texto_status(f):
-
-    hp_emoji = emoji_estado(
-        f["hp_atual"],
-        f["hp_max"],
-        "hp"
-    )
-
-    mana_emoji = emoji_estado(
-        f["mana_atual"],
-        f["mana_max"],
-        "mana"
-    )
-
-    esquerda = [
-        f"{hp_emoji} HP   : {f['hp_atual']}/{f['hp_max']}",
-        f"✨ XP   : {f['xp']}"
-    ]
-
-    direita = [
-        f"{mana_emoji} Mana : {f['mana_atual']}/{f['mana_max']}",
-        f"⚡ RC   : {calcular_rc(f)}"
-    ]
-
-    return montar_duas_colunas(
-        esquerda,
-        direita,
-        28
-    )
-
-
-# ============================================================
-# ATRIBUTOS EM 2 COLUNAS
-# ============================================================
-
-def texto_atributos(f):
-
-    itens = list(
-        ATRIBUTOS.items()
-    )
-
-    esquerda = []
-    direita = []
-
-    for chave, dados in itens[:3]:
-
+    for chave, dados in coluna_esquerda:
         emoji, nome = dados
-
-        esquerda.append(
-            f"{emoji} {nome:<3}: {f[chave]}"
+        esquerda_formatada.append(
+            f"{emoji} {nome}: {chave}"
         )
 
-    for chave, dados in itens[3:]:
+    largura = 0
 
-        emoji, nome = dados
+    for texto in esquerda_formatada:
+        if len(texto) > largura:
+            largura = len(texto)
 
-        direita.append(
-            f"{emoji} {nome:<3}: {f[chave]}"
-        )
+    largura += 2
 
-    return montar_duas_colunas(
-        esquerda,
-        direita,
-        28
-    )
+    for indice in range(metade):
 
+        esquerda = esquerda_formatada[indice]
 
-# ============================================================
-# PERÍCIAS EM 2 COLUNAS
-# ============================================================
+        if indice < len(coluna_direita):
+            chave, dados = coluna_direita[indice]
 
-def texto_pericias(f):
+            emoji, nome = dados
 
-    itens = list(
-        PERICIAS.items()
-    )
+            direita = f"{emoji} {nome}: {chave}"
 
-    esquerda = []
-    direita = []
-
-    metade = (
-        len(itens) + 1
-    ) // 2
-
-    grupo_esquerda = itens[:metade]
-    grupo_direita = itens[metade:]
-
-    for chave, dados in grupo_esquerda:
-
-        emoji, nome = dados
-
-        esquerda.append(
-            f"{emoji} {nome:<17}: {f[chave]}"
-        )
-
-    for chave, dados in grupo_direita:
-
-        emoji, nome = dados
-
-        direita.append(
-            f"{emoji} {nome:<17}: {f[chave]}"
-        )
-
-    return montar_duas_colunas(
-        esquerda,
-        direita,
-        30
-    )
-
-
-# ============================================================
-# PÁGINA STATUS
-# ============================================================
-
-def criar_pagina_status(
-    f,
-    jogador=None
-):
-
-    embed = discord.Embed(
-        title=f"📜 FICHA — {f['nome']}",
-        color=discord.Color.dark_red()
-    )
-
-    if f["tipo"] == "npc":
-
-        identificacao = (
-            "👹 Tipo: NPC"
-        )
-
-    else:
-
-        if jogador:
-
-            identificacao = (
-                f"👤 Jogador: {jogador.mention}"
+            linhas.append(
+                f"{esquerda:<{largura}}{direita}"
             )
 
         else:
+            linhas.append(esquerda)
 
-            identificacao = "👤 Tipo: Jogador"
+    return "\n".join(linhas)
 
-    conteudo = (
-        f"{identificacao}\n\n"
-        f"```text\n"
-        f"╔════════════════════════════════════════════════════╗\n"
-        f"║                    STATUS                         ║\n"
-        f"╠════════════════════════════════════════════════════╣\n"
-        f"{texto_status(f)}\n"
-        f"╚════════════════════════════════════════════════════╝\n"
-        f"```\n"
-        f"```text\n"
-        f"╔════════════════════════════════════════════════════╗\n"
-        f"║                  ATRIBUTOS                        ║\n"
-        f"╠════════════════════════════════════════════════════╣\n"
-        f"{texto_atributos(f)}\n"
-        f"╚════════════════════════════════════════════════════╝\n"
-        f"```"
+
+# ============================================================
+# TEXTO DOS ATRIBUTOS
+# ============================================================
+
+def texto_atributos(ficha):
+    itens = []
+
+    for chave, dados in ATRIBUTOS.items():
+        itens.append(
+            (
+                str(ficha[chave]),
+                (
+                    dados[0],
+                    f"{dados[1]}"
+                )
+            )
+        )
+
+    return alinhar_duas_colunas(itens)
+
+
+# ============================================================
+# TEXTO DAS PERÍCIAS
+# ============================================================
+
+def texto_pericias(ficha):
+    """
+    Usa uma estrutura independente para cada perícia.
+    Não há qualquer associação por posição entre
+    os valores das duas colunas.
+    """
+
+    itens = []
+
+    for chave, dados in PERICIAS.items():
+        itens.append(
+            (
+                str(ficha[chave]),
+                (
+                    dados[0],
+                    dados[1]
+                )
+            )
+        )
+
+    return alinhar_duas_colunas(itens)
+
+
+# ============================================================
+# STATUS
+# ============================================================
+
+def texto_status(ficha):
+    hp = (
+        f"{emoji_hp(ficha['hp_atual'], ficha['hp_max'])} "
+        f"HP: {ficha['hp_atual']}/{ficha['hp_max']}"
     )
 
-    embed.description = conteudo
+    mana = (
+        f"{emoji_mana(ficha['mana_atual'], ficha['mana_max'])} "
+        f"Mana: {ficha['mana_atual']}/{ficha['mana_max']}"
+    )
+
+    xp = f"✨ XP: {ficha['xp']}"
+    rc = f"⚡ RC: {calcular_rc(ficha)}"
+
+    itens = [
+        ("hp", (hp, "")),
+        ("mana", (mana, "")),
+        ("xp", (xp, "")),
+        ("rc", (rc, ""))
+    ]
+
+    esquerda = [
+        hp,
+        xp
+    ]
+
+    direita = [
+        mana,
+        rc
+    ]
+
+    largura = max(
+        len(texto)
+        for texto in esquerda
+    ) + 2
+
+    linhas = []
+
+    for i in range(2):
+        linhas.append(
+            f"{esquerda[i]:<{largura}}{direita[i]}"
+        )
+
+    return "\n".join(linhas)
+
+
+# ============================================================
+# EMBED STATUS
+# ============================================================
+
+def criar_pagina_status(ficha, jogador=None):
+
+    tipo = "👤 JOGADOR" if ficha["tipo"] == "jogador" else "👹 NPC"
+
+    if jogador:
+        dono = f"Jogador: {jogador.mention}"
+    else:
+        dono = "Mestre: ficha de NPC"
+
+    texto = (
+        "```text\n"
+        f"📜 FICHA: {ficha['nome']}\n"
+        f"{tipo}\n"
+        f"{dono}\n"
+        "\n"
+        "❤️ STATUS\n"
+        "\n"
+        f"{texto_status(ficha)}\n"
+        "\n"
+        "⚔️ ATRIBUTOS\n"
+        "\n"
+        f"{texto_atributos(ficha)}\n"
+        "```"
+    )
+
+    embed = discord.Embed(
+        description=texto,
+        color=discord.Color.dark_red()
+    )
 
     embed.set_footer(
         text="Página 1/2 • Status e Atributos"
@@ -654,27 +625,23 @@ def criar_pagina_status(
 
 
 # ============================================================
-# PÁGINA DE PERÍCIAS
+# EMBED PERÍCIAS
 # ============================================================
 
-def criar_pagina_pericias(f):
+def criar_pagina_pericias(ficha):
 
-    embed = discord.Embed(
-        title=f"📚 PERÍCIAS — {f['nome']}",
-        color=discord.Color.dark_red()
-    )
-
-    conteudo = (
+    texto = (
         "```text\n"
-        "╔════════════════════════════════════════════════════════════╗\n"
-        "║                         PERÍCIAS                          ║\n"
-        "╠════════════════════════════════════════════════════════════╣\n"
-        f"{texto_pericias(f)}\n"
-        "╚════════════════════════════════════════════════════════════╝\n"
+        f"📚 PERÍCIAS — {ficha['nome']}\n"
+        "\n"
+        f"{texto_pericias(ficha)}\n"
         "```"
     )
 
-    embed.description = conteudo
+    embed = discord.Embed(
+        description=texto,
+        color=discord.Color.dark_red()
+    )
 
     embed.set_footer(
         text="Página 2/2 • Perícias"
@@ -689,15 +656,8 @@ def criar_pagina_pericias(f):
 
 class FichaView(discord.ui.View):
 
-    def __init__(
-        self,
-        ficha,
-        jogador=None
-    ):
-
-        super().__init__(
-            timeout=300
-        )
+    def __init__(self, ficha, jogador=None):
+        super().__init__(timeout=120)
 
         self.ficha = ficha
         self.jogador = jogador
@@ -708,10 +668,9 @@ class FichaView(discord.ui.View):
     )
     async def status(
         self,
-        interaction,
-        button
+        interaction: discord.Interaction,
+        button: discord.ui.Button
     ):
-
         await interaction.response.edit_message(
             embed=criar_pagina_status(
                 self.ficha,
@@ -726,10 +685,9 @@ class FichaView(discord.ui.View):
     )
     async def pericias(
         self,
-        interaction,
-        button
+        interaction: discord.Interaction,
+        button: discord.ui.Button
     ):
-
         await interaction.response.edit_message(
             embed=criar_pagina_pericias(
                 self.ficha
@@ -739,18 +697,33 @@ class FichaView(discord.ui.View):
 
 
 # ============================================================
+# PERMISSÃO PARA ALTERAR FICHA
+# ============================================================
+
+def pode_alterar_ficha(interaction, ficha):
+
+    if eh_admin(interaction):
+        return True
+
+    if eh_mestre(interaction):
+        return True
+
+    if ficha["tipo"] == "jogador":
+        return ficha["dono_id"] == interaction.user.id
+
+    return False
+
+
+# ============================================================
 # BOT ONLINE
 # ============================================================
 
 @bot.event
 async def on_ready():
 
-    print(
-        f"Bot conectado como {bot.user}"
-    )
+    print(f"Bot conectado como {bot.user}")
 
     try:
-
         comandos = await bot.tree.sync()
 
         print(
@@ -776,7 +749,7 @@ async def on_ready():
     jogador="Jogador que será o Mestre"
 )
 async def definirmestre(
-    interaction,
+    interaction: discord.Interaction,
     jogador: discord.Member
 ):
 
@@ -815,7 +788,7 @@ async def definirmestre(
     db.commit()
 
     await interaction.response.send_message(
-        f"👑 **{jogador.display_name}** agora é o Mestre deste canal!"
+        f"👑 {jogador.mention} agora é o Mestre deste canal."
     )
 
 
@@ -825,13 +798,13 @@ async def definirmestre(
 
 @bot.tree.command(
     name="passarmestre",
-    description="Passa o cargo de Mestre para outro jogador."
+    description="Passa o cargo de Mestre."
 )
 @app_commands.describe(
     jogador="Novo Mestre"
 )
 async def passarmestre(
-    interaction,
+    interaction: discord.Interaction,
     jogador: discord.Member
 ):
 
@@ -873,7 +846,7 @@ async def passarmestre(
     db.commit()
 
     await interaction.response.send_message(
-        f"👑 Novo Mestre: {jogador.mention}"
+        f"👑 Mestre transferido para {jogador.mention}."
     )
 
 
@@ -885,7 +858,9 @@ async def passarmestre(
     name="mestre",
     description="Mostra o Mestre deste canal."
 )
-async def mestre(interaction):
+async def mestre(
+    interaction: discord.Interaction
+):
 
     mestre_id = obter_mestre(
         interaction.channel.id
@@ -899,9 +874,21 @@ async def mestre(interaction):
 
         return
 
-    await interaction.response.send_message(
-        f"👑 Mestre: <@{mestre_id}>"
+    membro = interaction.guild.get_member(
+        mestre_id
     )
+
+    if membro:
+
+        await interaction.response.send_message(
+            f"👑 Mestre: {membro.mention}"
+        )
+
+    else:
+
+        await interaction.response.send_message(
+            f"👑 Mestre: <@{mestre_id}>"
+        )
 
 
 # ============================================================
@@ -914,11 +901,11 @@ async def mestre(interaction):
 )
 @app_commands.describe(
     nome="Nome do personagem",
-    hp="HP inicial",
-    mana="Mana inicial"
+    hp="HP inicial e máximo",
+    mana="Mana inicial e máxima"
 )
 async def criarficha(
-    interaction,
+    interaction: discord.Interaction,
     nome: str,
     hp: int,
     mana: int
@@ -973,9 +960,48 @@ async def criarficha(
             hp_max,
             mana_atual,
             mana_max,
-            xp
+            xp,
+            forca,
+            destreza,
+            vigor,
+            inteligencia,
+            carisma,
+            raciocinio,
+            academicos,
+            idiomas,
+            oficios,
+            armas_brancas,
+            intimidacao,
+            ocultismo,
+            briga,
+            investigacao,
+            persuasao,
+            ciencias,
+            labia,
+            prontidao,
+            conhecimentos_gerais,
+            lideranca,
+            sobrevivencia,
+            conducao,
+            manha,
+            tecnologia,
+            esportes,
+            medicina,
+            mira,
+            esquiva,
+            furtividade,
+            aleatorio
         )
-        VALUES (?, ?, NULL, 'jogador', ?, ?, ?, ?, ?, 0)
+        VALUES (
+            ?, ?, NULL, 'jogador', ?,
+            ?, ?, ?, ?, 0,
+            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
+            0
+        )
     """, (
         interaction.channel.id,
         interaction.user.id,
@@ -989,23 +1015,25 @@ async def criarficha(
     db.commit()
 
     await interaction.response.send_message(
-        f"📜 Ficha de **{nome}** criada!\n\n"
-        f"❤️ HP: **{hp}/{hp}**\n"
-        f"🔵 Mana: **{mana}/{mana}**\n"
-        f"✨ XP: **0**\n"
-        f"⚡ RC: **5**"
+        f"📜 Ficha de {nome} criada!\n\n"
+        f"❤️ HP: {hp}/{hp}\n"
+        f"🔵 Mana: {mana}/{mana}\n"
+        f"✨ XP: 0\n"
+        f"⚡ RC: 5"
     )
 
 
 # ============================================================
-# VER PRÓPRIA FICHA
+# MOSTRAR FICHA
 # ============================================================
 
 @bot.tree.command(
     name="ficha",
     description="Mostra sua ficha."
 )
-async def ficha(interaction):
+async def ficha(
+    interaction: discord.Interaction
+):
 
     dados = buscar_ficha_jogador(
         interaction.channel.id,
@@ -1015,7 +1043,7 @@ async def ficha(interaction):
     if dados is None:
 
         await interaction.response.send_message(
-            "❌ Você não possui uma ficha neste canal.",
+            "❌ Você não possui uma ficha.",
             ephemeral=True
         )
 
@@ -1048,7 +1076,7 @@ async def ficha(interaction):
     jogador="Jogador"
 )
 async def verficha(
-    interaction,
+    interaction: discord.Interaction,
     jogador: discord.Member
 ):
 
@@ -1081,43 +1109,8 @@ async def verficha(
 
 
 # ============================================================
-# ATRIBUTO
-#
-# Sem personagem = altera a própria ficha.
-#
-# Mestre/Admin:
-# /atributo atributo valor personagem
-#
-# O personagem pode ser jogador ou NPC.
+# ALTERAR ATRIBUTO
 # ============================================================
-
-atributo_choices = [
-    app_commands.Choice(
-        name="Força",
-        value="forca"
-    ),
-    app_commands.Choice(
-        name="Destreza",
-        value="destreza"
-    ),
-    app_commands.Choice(
-        name="Vigor",
-        value="vigor"
-    ),
-    app_commands.Choice(
-        name="Inteligência",
-        value="inteligencia"
-    ),
-    app_commands.Choice(
-        name="Carisma",
-        value="carisma"
-    ),
-    app_commands.Choice(
-        name="Raciocínio",
-        value="raciocinio"
-    )
-]
-
 
 @bot.tree.command(
     name="atributo",
@@ -1126,16 +1119,23 @@ atributo_choices = [
 @app_commands.describe(
     atributo="Atributo",
     valor="Novo valor",
-    personagem="Nome da ficha. Deixe vazio para usar sua ficha."
+    ficha="ID da ficha, opcional para o Mestre"
 )
 @app_commands.choices(
-    atributo=atributo_choices
+    atributo=[
+        app_commands.Choice(name="Força", value="forca"),
+        app_commands.Choice(name="Destreza", value="destreza"),
+        app_commands.Choice(name="Vigor", value="vigor"),
+        app_commands.Choice(name="Inteligência", value="inteligencia"),
+        app_commands.Choice(name="Carisma", value="carisma"),
+        app_commands.Choice(name="Raciocínio", value="raciocinio")
+    ]
 )
 async def atributo(
-    interaction,
+    interaction: discord.Interaction,
     atributo: app_commands.Choice[str],
     valor: int,
-    personagem: str = None
+    ficha: int = None
 ):
 
     if valor < 0:
@@ -1147,30 +1147,18 @@ async def atributo(
 
         return
 
-    if personagem:
-
-        if (
-            not eh_mestre(interaction)
-            and not eh_admin(interaction)
-        ):
-
-            await interaction.response.send_message(
-                "❌ Somente o Mestre ou administrador pode escolher outra ficha.",
-                ephemeral=True
-            )
-
-            return
-
-        dados = buscar_ficha_por_nome(
-            interaction.channel.id,
-            personagem
-        )
-
-    else:
+    if ficha is None:
 
         dados = buscar_ficha_jogador(
             interaction.channel.id,
             interaction.user.id
+        )
+
+    else:
+
+        dados = buscar_ficha_por_id(
+            interaction.channel.id,
+            ficha
         )
 
     if dados is None:
@@ -1182,11 +1170,9 @@ async def atributo(
 
         return
 
-    f = transformar_ficha(dados)
-
     if not pode_alterar_ficha(
         interaction,
-        f
+        dados
     ):
 
         await interaction.response.send_message(
@@ -1206,43 +1192,21 @@ async def atributo(
         """,
         (
             valor,
-            f["id"]
+            dados["id"]
         )
     )
 
     db.commit()
 
-    nome_atributo = ATRIBUTOS[
-        coluna
-    ][1]
-
     await interaction.response.send_message(
-        f"⚔️ **{f['nome']}** — {nome_atributo} alterado para **{valor}**."
+        f"⚔️ {dados['nome']} — "
+        f"{ATRIBUTOS[coluna][1]} alterado para {valor}."
     )
 
 
 # ============================================================
-# PERÍCIA
-#
-# Sem personagem = própria ficha.
-#
-# Mestre/Admin:
-# /pericia pericia valor personagem
-#
-# Isso permite alterar NPC ou jogador.
+# ALTERAR PERÍCIA
 # ============================================================
-
-pericia_choices = [
-    app_commands.Choice(
-        name=nome,
-        value=chave
-    )
-    for chave, (
-        emoji,
-        nome
-    ) in PERICIAS.items()
-]
-
 
 @bot.tree.command(
     name="pericia",
@@ -1251,16 +1215,40 @@ pericia_choices = [
 @app_commands.describe(
     pericia="Perícia",
     valor="Novo valor",
-    personagem="Nome da ficha. Deixe vazio para usar sua ficha."
+    ficha="ID da ficha, opcional para o Mestre"
 )
 @app_commands.choices(
-    pericia=pericia_choices
+    pericia=[
+        app_commands.Choice(name="Acadêmicos", value="academicos"),
+        app_commands.Choice(name="Idiomas", value="idiomas"),
+        app_commands.Choice(name="Ofícios", value="oficios"),
+        app_commands.Choice(name="Armas Brancas", value="armas_brancas"),
+        app_commands.Choice(name="Intimidação", value="intimidacao"),
+        app_commands.Choice(name="Ocultismo", value="ocultismo"),
+        app_commands.Choice(name="Briga", value="briga"),
+        app_commands.Choice(name="Investigação", value="investigacao"),
+        app_commands.Choice(name="Persuasão", value="persuasao"),
+        app_commands.Choice(name="Ciências", value="ciencias"),
+        app_commands.Choice(name="Lábia", value="labia"),
+        app_commands.Choice(name="Prontidão", value="prontidao"),
+        app_commands.Choice(name="Conhecimentos Gerais", value="conhecimentos_gerais"),
+        app_commands.Choice(name="Liderança", value="lideranca"),
+        app_commands.Choice(name="Sobrevivência", value="sobrevivencia"),
+        app_commands.Choice(name="Condução", value="conducao"),
+        app_commands.Choice(name="Manha", value="manha"),
+        app_commands.Choice(name="Tecnologia", value="tecnologia"),
+        app_commands.Choice(name="Esportes", value="esportes"),
+        app_commands.Choice(name="Medicina", value="medicina"),
+        app_commands.Choice(name="Mira", value="mira"),
+        app_commands.Choice(name="Esquiva", value="esquiva"),
+        app_commands.Choice(name="Furtividade", value="furtividade")
+    ]
 )
 async def pericia(
-    interaction,
+    interaction: discord.Interaction,
     pericia: app_commands.Choice[str],
     valor: int,
-    personagem: str = None
+    ficha: int = None
 ):
 
     if valor < 0:
@@ -1272,30 +1260,18 @@ async def pericia(
 
         return
 
-    if personagem:
-
-        if (
-            not eh_mestre(interaction)
-            and not eh_admin(interaction)
-        ):
-
-            await interaction.response.send_message(
-                "❌ Somente o Mestre ou administrador pode escolher outra ficha.",
-                ephemeral=True
-            )
-
-            return
-
-        dados = buscar_ficha_por_nome(
-            interaction.channel.id,
-            personagem
-        )
-
-    else:
+    if ficha is None:
 
         dados = buscar_ficha_jogador(
             interaction.channel.id,
             interaction.user.id
+        )
+
+    else:
+
+        dados = buscar_ficha_por_id(
+            interaction.channel.id,
+            ficha
         )
 
     if dados is None:
@@ -1307,11 +1283,9 @@ async def pericia(
 
         return
 
-    f = transformar_ficha(dados)
-
     if not pode_alterar_ficha(
         interaction,
-        f
+        dados
     ):
 
         await interaction.response.send_message(
@@ -1323,13 +1297,6 @@ async def pericia(
 
     coluna = pericia.value
 
-    # ========================================================
-    # CORREÇÃO DO ERRO DAS PERÍCIAS
-    #
-    # O comando altera EXATAMENTE a coluna escolhida.
-    # Não existe índice de coluna esquerda/direita aqui.
-    # ========================================================
-
     cursor.execute(
         f"""
         UPDATE fichas
@@ -1338,18 +1305,15 @@ async def pericia(
         """,
         (
             valor,
-            f["id"]
+            dados["id"]
         )
     )
 
     db.commit()
 
-    nome_pericia = PERICIAS[
-        coluna
-    ][1]
-
     await interaction.response.send_message(
-        f"📚 **{f['nome']}** — {nome_pericia} alterada para **{valor}**."
+        f"📚 {dados['nome']} — "
+        f"{PERICIAS[coluna][1]} alterada para {valor}."
     )
 
 
@@ -1359,15 +1323,15 @@ async def pericia(
 
 @bot.tree.command(
     name="alterarficha",
-    description="Altera HP e Mana máximos de um jogador."
+    description="Altera HP e Mana máximos."
 )
 @app_commands.describe(
-    jogador="Jogador",
+    jogador="Jogador da ficha",
     hp="Novo HP máximo",
     mana="Nova Mana máxima"
 )
 async def alterarficha(
-    interaction,
+    interaction: discord.Interaction,
     jogador: discord.Member,
     hp: int,
     mana: int
@@ -1381,17 +1345,15 @@ async def alterarficha(
     if dados is None:
 
         await interaction.response.send_message(
-            "❌ Ficha não encontrada.",
+            "❌ Esse jogador não possui uma ficha.",
             ephemeral=True
         )
 
         return
 
-    f = transformar_ficha(dados)
-
     if not pode_alterar_ficha(
         interaction,
-        f
+        dados
     ):
 
         await interaction.response.send_message(
@@ -1422,28 +1384,28 @@ async def alterarficha(
         hp,
         mana,
         mana,
-        f["id"]
+        dados["id"]
     ))
 
     db.commit()
 
     await interaction.response.send_message(
-        f"⚙️ **{f['nome']}** atualizada!\n"
-        f"❤️ HP: **{hp}/{hp}**\n"
-        f"🔵 Mana: **{mana}/{mana}**"
+        f"⚙️ Ficha de {dados['nome']} atualizada.\n\n"
+        f"❤️ HP: {hp}/{hp}\n"
+        f"🔵 Mana: {mana}/{mana}"
     )
 
 
 # ============================================================
-# APAGAR PRÓPRIA FICHA
+# APAGAR FICHA
 # ============================================================
 
 @bot.tree.command(
     name="apagarficha",
-    description="Apaga sua própria ficha."
+    description="Apaga sua ficha."
 )
 async def apagarficha(
-    interaction
+    interaction: discord.Interaction
 ):
 
     dados = buscar_ficha_jogador(
@@ -1460,28 +1422,20 @@ async def apagarficha(
 
         return
 
-    f = transformar_ficha(dados)
-
     cursor.execute(
-        """
-        DELETE FROM fichas
-        WHERE id = ?
-        """,
-        (f["id"],)
+        "DELETE FROM fichas WHERE id = ?",
+        (dados["id"],)
     )
 
     db.commit()
 
     await interaction.response.send_message(
-        f"🗑️ A ficha **{f['nome']}** foi apagada."
+        f"🗑️ A ficha {dados['nome']} foi apagada."
     )
 
 
 # ============================================================
 # DANO
-#
-# Pode ser usado pelo jogador em outra ficha.
-# Mestre/Admin também pode.
 # ============================================================
 
 @bot.tree.command(
@@ -1489,14 +1443,28 @@ async def apagarficha(
     description="Aplica dano a um jogador."
 )
 @app_commands.describe(
-    jogador="Jogador que receberá o dano",
+    jogador="Jogador que receberá dano",
     valor="Quantidade de dano"
 )
 async def dano(
-    interaction,
+    interaction: discord.Interaction,
     jogador: discord.Member,
     valor: int
 ):
+
+    dados = buscar_ficha_jogador(
+        interaction.channel.id,
+        jogador.id
+    )
+
+    if dados is None:
+
+        await interaction.response.send_message(
+            "❌ Ficha não encontrada.",
+            ephemeral=True
+        )
+
+        return
 
     if valor <= 0:
 
@@ -1507,25 +1475,9 @@ async def dano(
 
         return
 
-    dados = buscar_ficha_jogador(
-        interaction.channel.id,
-        jogador.id
-    )
-
-    if dados is None:
-
-        await interaction.response.send_message(
-            "❌ Ficha não encontrada.",
-            ephemeral=True
-        )
-
-        return
-
-    f = transformar_ficha(dados)
-
     novo_hp = max(
         0,
-        f["hp_atual"] - valor
+        dados["hp_atual"] - valor
     )
 
     cursor.execute("""
@@ -1534,21 +1486,19 @@ async def dano(
         WHERE id = ?
     """, (
         novo_hp,
-        f["id"]
+        dados["id"]
     ))
 
     db.commit()
 
     await interaction.response.send_message(
-        f"💥 **{f['nome']}** recebeu **{valor} de dano**!\n"
-        f"❤️ HP: **{novo_hp}/{f['hp_max']}**"
+        f"💥 {dados['nome']} recebeu {valor} de dano.\n"
+        f"❤️ HP: {novo_hp}/{dados['hp_max']}"
     )
 
 
 # ============================================================
 # CURA
-#
-# Jogador pode curar outro jogador.
 # ============================================================
 
 @bot.tree.command(
@@ -1556,23 +1506,14 @@ async def dano(
     description="Cura um jogador."
 )
 @app_commands.describe(
-    jogador="Jogador que receberá a cura",
+    jogador="Jogador que receberá cura",
     valor="Quantidade de cura"
 )
 async def cura(
-    interaction,
+    interaction: discord.Interaction,
     jogador: discord.Member,
     valor: int
 ):
-
-    if valor <= 0:
-
-        await interaction.response.send_message(
-            "❌ A cura precisa ser maior que 0.",
-            ephemeral=True
-        )
-
-        return
 
     dados = buscar_ficha_jogador(
         interaction.channel.id,
@@ -1588,52 +1529,6 @@ async def cura(
 
         return
 
-    f = transformar_ficha(dados)
-
-    novo_hp = min(
-        f["hp_max"],
-        f["hp_atual"] + valor
-    )
-
-    recuperado = (
-        novo_hp - f["hp_atual"]
-    )
-
-    cursor.execute("""
-        UPDATE fichas
-        SET hp_atual = ?
-        WHERE id = ?
-    """, (
-        novo_hp,
-        f["id"]
-    ))
-
-    db.commit()
-
-    await interaction.response.send_message(
-        f"💚 **{f['nome']}** recuperou **{recuperado} HP**!\n"
-        f"❤️ HP: **{novo_hp}/{f['hp_max']}**"
-    )
-
-
-# ============================================================
-# CURAR NPC
-# ============================================================
-
-@bot.tree.command(
-    name="curarnpc",
-    description="Cura um NPC."
-)
-@app_commands.describe(
-    nome="Nome exato do NPC",
-    valor="Quantidade de cura"
-)
-async def curarnpc(
-    interaction,
-    nome: str,
-    valor: int
-):
-
     if valor <= 0:
 
         await interaction.response.send_message(
@@ -1643,39 +1538,12 @@ async def curarnpc(
 
         return
 
-    dados = buscar_ficha_por_nome(
-        interaction.channel.id,
-        nome
-    )
-
-    if dados is None:
-
-        await interaction.response.send_message(
-            "❌ NPC não encontrado.",
-            ephemeral=True
-        )
-
-        return
-
-    f = transformar_ficha(dados)
-
-    if f["tipo"] != "npc":
-
-        await interaction.response.send_message(
-            "❌ Essa ficha não é um NPC.",
-            ephemeral=True
-        )
-
-        return
-
     novo_hp = min(
-        f["hp_max"],
-        f["hp_atual"] + valor
+        dados["hp_max"],
+        dados["hp_atual"] + valor
     )
 
-    recuperado = (
-        novo_hp - f["hp_atual"]
-    )
+    recuperado = novo_hp - dados["hp_atual"]
 
     cursor.execute("""
         UPDATE fichas
@@ -1683,14 +1551,14 @@ async def curarnpc(
         WHERE id = ?
     """, (
         novo_hp,
-        f["id"]
+        dados["id"]
     ))
 
     db.commit()
 
     await interaction.response.send_message(
-        f"💚 **{f['nome']}** recuperou **{recuperado} HP**!\n"
-        f"❤️ HP: **{novo_hp}/{f['hp_max']}**"
+        f"💚 {dados['nome']} recuperou {recuperado} de HP.\n"
+        f"❤️ HP: {novo_hp}/{dados['hp_max']}"
     )
 
 
@@ -1700,13 +1568,13 @@ async def curarnpc(
 
 @bot.tree.command(
     name="gastarmana",
-    description="Gasta Mana da sua ficha."
+    description="Gasta Mana."
 )
 @app_commands.describe(
     valor="Quantidade de Mana"
 )
 async def gastarmana(
-    interaction,
+    interaction: discord.Interaction,
     valor: int
 ):
 
@@ -1733,9 +1601,7 @@ async def gastarmana(
 
         return
 
-    f = transformar_ficha(dados)
-
-    if valor > f["mana_atual"]:
+    if valor > dados["mana_atual"]:
 
         await interaction.response.send_message(
             "❌ Mana insuficiente.",
@@ -1744,9 +1610,7 @@ async def gastarmana(
 
         return
 
-    nova_mana = (
-        f["mana_atual"] - valor
-    )
+    nova_mana = dados["mana_atual"] - valor
 
     cursor.execute("""
         UPDATE fichas
@@ -1754,43 +1618,34 @@ async def gastarmana(
         WHERE id = ?
     """, (
         nova_mana,
-        f["id"]
+        dados["id"]
     ))
 
     db.commit()
 
     await interaction.response.send_message(
-        f"🔮 **{f['nome']}** gastou **{valor} Mana**!\n"
-        f"🔵 Mana: **{nova_mana}/{f['mana_max']}**"
+        f"🔮 {dados['nome']} gastou {valor} de Mana.\n"
+        f"🔵 Mana: {nova_mana}/{dados['mana_max']}"
     )
 
 
 # ============================================================
-# RECUPERAR MANA DE OUTRO JOGADOR
+# RECUPERAR MANA
 # ============================================================
 
 @bot.tree.command(
     name="recuperarmana",
-    description="Recupera Mana de um jogador."
+    description="Recupera Mana de jogador ou NPC."
 )
 @app_commands.describe(
     jogador="Jogador que receberá Mana",
     valor="Quantidade de Mana"
 )
 async def recuperarmana(
-    interaction,
+    interaction: discord.Interaction,
     jogador: discord.Member,
     valor: int
 ):
-
-    if valor <= 0:
-
-        await interaction.response.send_message(
-            "❌ O valor precisa ser maior que 0.",
-            ephemeral=True
-        )
-
-        return
 
     dados = buscar_ficha_jogador(
         interaction.channel.id,
@@ -1806,16 +1661,21 @@ async def recuperarmana(
 
         return
 
-    f = transformar_ficha(dados)
+    if valor <= 0:
+
+        await interaction.response.send_message(
+            "❌ O valor precisa ser maior que 0.",
+            ephemeral=True
+        )
+
+        return
 
     nova_mana = min(
-        f["mana_max"],
-        f["mana_atual"] + valor
+        dados["mana_max"],
+        dados["mana_atual"] + valor
     )
 
-    recuperado = (
-        nova_mana - f["mana_atual"]
-    )
+    recuperado = nova_mana - dados["mana_atual"]
 
     cursor.execute("""
         UPDATE fichas
@@ -1823,34 +1683,48 @@ async def recuperarmana(
         WHERE id = ?
     """, (
         nova_mana,
-        f["id"]
+        dados["id"]
     ))
 
     db.commit()
 
     await interaction.response.send_message(
-        f"💧 **{f['nome']}** recuperou **{recuperado} Mana**!\n"
-        f"🔵 Mana: **{nova_mana}/{f['mana_max']}**"
+        f"💧 {dados['nome']} recuperou {recuperado} de Mana.\n"
+        f"🔵 Mana: {nova_mana}/{dados['mana_max']}"
     )
 
 
 # ============================================================
-# RECUPERAR MANA DE NPC
+# CURAR / RECUPERAR NPC OU QUALQUER FICHA
 # ============================================================
 
 @bot.tree.command(
-    name="recuperarmananpc",
-    description="Recupera Mana de um NPC."
+    name="curarficha",
+    description="Cura qualquer ficha pelo ID. Mestre pode usar em NPCs."
 )
 @app_commands.describe(
-    nome="Nome exato do NPC",
-    valor="Quantidade de Mana"
+    ficha="ID da ficha",
+    valor="Quantidade de HP"
 )
-async def recuperarmananpc(
-    interaction,
-    nome: str,
+async def curarficha(
+    interaction: discord.Interaction,
+    ficha: int,
     valor: int
 ):
+
+    dados = buscar_ficha_por_id(
+        interaction.channel.id,
+        ficha
+    )
+
+    if dados is None:
+
+        await interaction.response.send_message(
+            "❌ Ficha não encontrada.",
+            ephemeral=True
+        )
+
+        return
 
     if valor <= 0:
 
@@ -1861,39 +1735,131 @@ async def recuperarmananpc(
 
         return
 
-    dados = buscar_ficha_por_nome(
-        interaction.channel.id,
-        nome
-    )
-
-    if dados is None:
+    if (
+        dados["tipo"] == "npc"
+        and not eh_mestre(interaction)
+        and not eh_admin(interaction)
+    ):
 
         await interaction.response.send_message(
-            "❌ NPC não encontrado.",
+            "❌ Somente o Mestre pode alterar NPCs.",
             ephemeral=True
         )
 
         return
 
-    f = transformar_ficha(dados)
-
-    if f["tipo"] != "npc":
+    if (
+        dados["tipo"] == "jogador"
+        and dados["dono_id"] != interaction.user.id
+        and not eh_mestre(interaction)
+        and not eh_admin(interaction)
+    ):
 
         await interaction.response.send_message(
-            "❌ Essa ficha não é um NPC.",
+            "❌ Você não pode alterar essa ficha.",
+            ephemeral=True
+        )
+
+        return
+
+    novo_hp = min(
+        dados["hp_max"],
+        dados["hp_atual"] + valor
+    )
+
+    recuperado = novo_hp - dados["hp_atual"]
+
+    cursor.execute("""
+        UPDATE fichas
+        SET hp_atual = ?
+        WHERE id = ?
+    """, (
+        novo_hp,
+        dados["id"]
+    ))
+
+    db.commit()
+
+    await interaction.response.send_message(
+        f"💚 {dados['nome']} recuperou {recuperado} de HP.\n"
+        f"❤️ HP: {novo_hp}/{dados['hp_max']}"
+    )
+
+
+# ============================================================
+# RECUPERAR MANA POR ID
+# ============================================================
+
+@bot.tree.command(
+    name="manaficha",
+    description="Recupera Mana de qualquer ficha pelo ID."
+)
+@app_commands.describe(
+    ficha="ID da ficha",
+    valor="Quantidade de Mana"
+)
+async def manaficha(
+    interaction: discord.Interaction,
+    ficha: int,
+    valor: int
+):
+
+    dados = buscar_ficha_por_id(
+        interaction.channel.id,
+        ficha
+    )
+
+    if dados is None:
+
+        await interaction.response.send_message(
+            "❌ Ficha não encontrada.",
+            ephemeral=True
+        )
+
+        return
+
+    if valor <= 0:
+
+        await interaction.response.send_message(
+            "❌ O valor precisa ser maior que 0.",
+            ephemeral=True
+        )
+
+        return
+
+    if (
+        dados["tipo"] == "npc"
+        and not eh_mestre(interaction)
+        and not eh_admin(interaction)
+    ):
+
+        await interaction.response.send_message(
+            "❌ Somente o Mestre pode alterar NPCs.",
+            ephemeral=True
+        )
+
+        return
+
+    if (
+        dados["tipo"] == "jogador"
+        and dados["dono_id"] != interaction.user.id
+        and not eh_mestre(interaction)
+        and not eh_admin(interaction)
+    ):
+
+        await interaction.response.send_message(
+            "❌ Você não pode alterar essa ficha.",
             ephemeral=True
         )
 
         return
 
     nova_mana = min(
-        f["mana_max"],
-        f["mana_atual"] + valor
+        dados["mana_max"],
+        dados["mana_atual"] + valor
     )
 
-    recuperado = (
-        nova_mana - f["mana_atual"]
-    )
+    recuperado = nova_mana - dados["mana_atual"]
 
     cursor.execute("""
         UPDATE fichas
@@ -1901,14 +1867,14 @@ async def recuperarmananpc(
         WHERE id = ?
     """, (
         nova_mana,
-        f["id"]
+        dados["id"]
     ))
 
     db.commit()
 
     await interaction.response.send_message(
-        f"💧 **{f['nome']}** recuperou **{recuperado} Mana**!\n"
-        f"🔵 Mana: **{nova_mana}/{f['mana_max']}**"
+        f"💧 {dados['nome']} recuperou {recuperado} de Mana.\n"
+        f"🔵 Mana: {nova_mana}/{dados['mana_max']}"
     )
 
 
@@ -1918,17 +1884,31 @@ async def recuperarmananpc(
 
 @bot.tree.command(
     name="addxp",
-    description="Adiciona XP a uma ficha."
+    description="Adiciona XP."
 )
 @app_commands.describe(
     jogador="Jogador",
     valor="Quantidade de XP"
 )
 async def addxp(
-    interaction,
+    interaction: discord.Interaction,
     jogador: discord.Member,
     valor: int
 ):
+
+    dados = buscar_ficha_jogador(
+        interaction.channel.id,
+        jogador.id
+    )
+
+    if dados is None:
+
+        await interaction.response.send_message(
+            "❌ Ficha não encontrada.",
+            ephemeral=True
+        )
+
+        return
 
     if valor <= 0:
 
@@ -1940,33 +1920,17 @@ async def addxp(
         return
 
     if (
-        not eh_mestre(interaction)
+        dados["dono_id"] != interaction.user.id
+        and not eh_mestre(interaction)
         and not eh_admin(interaction)
-        and jogador.id != interaction.user.id
     ):
 
         await interaction.response.send_message(
-            "❌ Você não pode alterar o XP desse jogador.",
+            "❌ Você não pode alterar o XP dessa ficha.",
             ephemeral=True
         )
 
         return
-
-    dados = buscar_ficha_jogador(
-        interaction.channel.id,
-        jogador.id
-    )
-
-    if dados is None:
-
-        await interaction.response.send_message(
-            "❌ Ficha não encontrada.",
-            ephemeral=True
-        )
-
-        return
-
-    f = transformar_ficha(dados)
 
     cursor.execute("""
         UPDATE fichas
@@ -1974,25 +1938,21 @@ async def addxp(
         WHERE id = ?
     """, (
         valor,
-        f["id"]
+        dados["id"]
     ))
 
     db.commit()
 
     cursor.execute(
-        """
-        SELECT xp
-        FROM fichas
-        WHERE id = ?
-        """,
-        (f["id"],)
+        "SELECT xp FROM fichas WHERE id = ?",
+        (dados["id"],)
     )
 
-    xp_atual = cursor.fetchone()["xp"]
+    xp_atual = cursor.fetchone()[0]
 
     await interaction.response.send_message(
-        f"✨ **{f['nome']}** recebeu **{valor} XP**!\n"
-        f"✨ XP atual: **{xp_atual}**"
+        f"✨ {dados['nome']} recebeu {valor} XP.\n"
+        f"✨ XP atual: {xp_atual}"
     )
 
 
@@ -2005,7 +1965,7 @@ async def addxp(
     description="Cria um NPC."
 )
 @app_commands.describe(
-    aleatorio="NPC aleatório?",
+    aleatorio="NPC aleatório ou personalizado",
     nome="Nome do NPC",
     hp="HP do NPC",
     mana="Mana do NPC"
@@ -2023,7 +1983,7 @@ async def addxp(
     ]
 )
 async def criarnpc(
-    interaction,
+    interaction: discord.Interaction,
     aleatorio: app_commands.Choice[str],
     nome: str = None,
     hp: int = None,
@@ -2066,19 +2026,11 @@ async def criarnpc(
             "Cavaleiro Sombrio"
         ]
 
-        nome = random.choice(
-            nomes
-        )
+        nome = random.choice(nomes)
 
-        hp = random.randint(
-            20,
-            150
-        )
+        hp = random.randint(20, 150)
 
-        mana = random.randint(
-            0,
-            100
-        )
+        mana = random.randint(0, 100)
 
         atributos = {
             chave: random.randint(0, 5)
@@ -2163,23 +2115,12 @@ async def criarnpc(
 
     colunas = (
         list(ATRIBUTOS.keys())
-        + list(PERICIAS.keys())
+        + ORDEM_PERICIAS
     )
 
     valores = (
-        [
-            atributos[chave]
-            for chave in ATRIBUTOS
-        ]
-        +
-        [
-            pericias[chave]
-            for chave in PERICIAS
-        ]
-    )
-
-    nomes_colunas = ", ".join(
-        colunas
+        [atributos[chave] for chave in ATRIBUTOS]
+        + [pericias[chave] for chave in ORDEM_PERICIAS]
     )
 
     placeholders = ", ".join(
@@ -2199,7 +2140,7 @@ async def criarnpc(
             mana_atual,
             mana_max,
             xp,
-            {nomes_colunas},
+            {", ".join(colunas)},
             aleatorio
         )
         VALUES (
@@ -2219,9 +2160,7 @@ async def criarnpc(
             mana
         ]
         + valores
-        + [
-            aleatorio_valor
-        ]
+        + [aleatorio_valor]
     )
 
     db.commit()
@@ -2233,12 +2172,10 @@ async def criarnpc(
     )
 
     await interaction.response.send_message(
-        f"👹 NPC **{nome}** criado!\n\n"
-        f"❤️ HP: **{hp}/{hp}**\n"
-        f"🔵 Mana: **{mana}/{mana}**\n"
-        f"⚡ RC: **{rc}**\n\n"
-        f"🎲 Atributos e perícias "
-        f"{'gerados aleatoriamente' if aleatorio_valor else 'iniciados em 0'}."
+        f"👹 NPC {nome} criado!\n\n"
+        f"❤️ HP: {hp}/{hp}\n"
+        f"🔵 Mana: {mana}/{mana}\n"
+        f"⚡ RC: {rc}"
     )
 
 
@@ -2250,7 +2187,9 @@ async def criarnpc(
     name="npcs",
     description="Mostra os NPCs da mesa."
 )
-async def npcs(interaction):
+async def npcs(
+    interaction: discord.Interaction
+):
 
     if (
         not eh_mestre(interaction)
@@ -2285,24 +2224,37 @@ async def npcs(interaction):
 
         return
 
-    await interaction.response.send_message(
-        f"👹 **NPCs da mesa — {len(resultados)} encontrados**",
-        ephemeral=True
-    )
+    primeiro = True
 
     for dados in resultados:
 
-        f = transformar_ficha(
-            dados
-        )
+        ficha_npc = transformar_ficha(dados)
 
-        await interaction.followup.send(
-            embed=criar_pagina_status(
-                f
-            ),
-            view=FichaView(f),
-            ephemeral=True
-        )
+        if primeiro:
+
+            await interaction.response.send_message(
+                embed=criar_pagina_status(
+                    ficha_npc
+                ),
+                view=FichaView(
+                    ficha_npc
+                ),
+                ephemeral=True
+            )
+
+            primeiro = False
+
+        else:
+
+            await interaction.followup.send(
+                embed=criar_pagina_status(
+                    ficha_npc
+                ),
+                view=FichaView(
+                    ficha_npc
+                ),
+                ephemeral=True
+            )
 
 
 # ============================================================
@@ -2317,7 +2269,7 @@ async def npcs(interaction):
     nome="Nome exato do NPC"
 )
 async def apagarnpc(
-    interaction,
+    interaction: discord.Interaction,
     nome: str
 ):
 
@@ -2333,12 +2285,21 @@ async def apagarnpc(
 
         return
 
-    dados = buscar_ficha_por_nome(
+    cursor.execute("""
+        SELECT id
+        FROM fichas
+        WHERE channel_id = ?
+        AND tipo = 'npc'
+        AND nome = ?
+        LIMIT 1
+    """, (
         interaction.channel.id,
         nome
-    )
+    ))
 
-    if dados is None:
+    resultado = cursor.fetchone()
+
+    if resultado is None:
 
         await interaction.response.send_message(
             "❌ NPC não encontrado.",
@@ -2347,98 +2308,76 @@ async def apagarnpc(
 
         return
 
-    f = transformar_ficha(
-        dados
-    )
-
-    if f["tipo"] != "npc":
-
-        await interaction.response.send_message(
-            "❌ Essa ficha não é um NPC.",
-            ephemeral=True
-        )
-
-        return
-
     cursor.execute(
-        """
-        DELETE FROM fichas
-        WHERE id = ?
-        """,
-        (f["id"],)
+        "DELETE FROM fichas WHERE id = ?",
+        (resultado[0],)
     )
 
     db.commit()
 
     await interaction.response.send_message(
-        f"🗑️ NPC **{f['nome']}** apagado."
+        f"🗑️ NPC {nome} apagado."
     )
 
 
 # ============================================================
-# AJUDA
+# HELP
 # ============================================================
 
 @bot.tree.command(
     name="help",
     description="Mostra os comandos do bot."
 )
-async def help(interaction):
+async def help(
+    interaction: discord.Interaction
+):
 
     embed = discord.Embed(
         title="📖 BotRPG",
-        description="Comandos disponíveis",
+        description="Comandos disponíveis:",
         color=discord.Color.dark_red()
     )
 
     embed.add_field(
         name="👤 Jogador",
         value=(
-            "`/criarficha`\n"
-            "`/ficha`\n"
-            "`/verficha`\n"
-            "`/atributo`\n"
-            "`/pericia`\n"
-            "`/apagarficha`\n"
-            "`/gastarmana`\n"
-            "`/cura`\n"
-            "`/dano`\n"
-            "`/recuperarmana`\n"
-            "`/addxp`"
+            "`/criarficha` — Criar ficha\n"
+            "`/ficha` — Ver ficha\n"
+            "`/verficha` — Ver outra ficha\n"
+            "`/atributo` — Alterar atributo\n"
+            "`/pericia` — Alterar perícia\n"
+            "`/alterarficha` — Alterar HP/Mana\n"
+            "`/apagarficha` — Apagar ficha\n"
+            "`/dano` — Aplicar dano\n"
+            "`/cura` — Curar jogador\n"
+            "`/gastarmana` — Gastar Mana\n"
+            "`/recuperarmana` — Recuperar Mana\n"
+            "`/addxp` — Adicionar XP"
         ),
         inline=False
     )
 
     embed.add_field(
-        name="👹 NPC / Mestre",
+        name="👑 Mestre",
         value=(
-            "`/criarnpc`\n"
-            "`/npcs`\n"
-            "`/apagarnpc`\n"
-            "`/curarnpc`\n"
-            "`/recuperarmananpc`\n"
-            "`/alterarficha`"
+            "`/definirmestre` — Definir Mestre\n"
+            "`/passarmestre` — Passar Mestre\n"
+            "`/mestre` — Ver Mestre\n"
+            "`/criarnpc` — Criar NPC\n"
+            "`/npcs` — Ver NPCs\n"
+            "`/apagarnpc` — Apagar NPC\n"
+            "`/curarficha` — Curar por ID\n"
+            "`/manaficha` — Recuperar Mana por ID"
         ),
         inline=False
     )
 
     embed.add_field(
-        name="👑 Mesa",
+        name="🛡️ Alterações por ficha",
         value=(
-            "`/definirmestre`\n"
-            "`/passarmestre`\n"
-            "`/mestre`"
-        ),
-        inline=False
-    )
-
-    embed.add_field(
-        name="⚔️ Alteração de ficha pelo Mestre",
-        value=(
-            "O Mestre pode alterar qualquer ficha "
-            "usando o nome do personagem.\n\n"
-            "`/atributo` → escolha o personagem\n"
-            "`/pericia` → escolha o personagem"
+            "O Mestre pode usar `/atributo` e `/pericia` "
+            "informando o ID da ficha para alterar "
+            "qualquer jogador ou NPC."
         ),
         inline=False
     )
@@ -2451,22 +2390,6 @@ async def help(interaction):
         embed=embed,
         ephemeral=True
     )
-
-
-# ============================================================
-# ENCERRAMENTO SEGURO DO BANCO
-# ============================================================
-
-import atexit
-
-
-@atexit.register
-def fechar_banco():
-
-    try:
-        db.close()
-    except Exception:
-        pass
 
 
 # ============================================================
