@@ -56,7 +56,11 @@ db.commit()
 # ============================================================
 
 intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
+
+bot = commands.Bot(
+    command_prefix="!",
+    intents=intents
+)
 
 
 # ============================================================
@@ -64,14 +68,20 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # ============================================================
 
 def garantir_mesa(channel_id):
+
     cursor.execute("""
-        INSERT OR IGNORE INTO mesas (channel_id, mestre_id)
+        INSERT OR IGNORE INTO mesas (
+            channel_id,
+            mestre_id
+        )
         VALUES (?, NULL)
     """, (channel_id,))
+
     db.commit()
 
 
 def obter_mestre(channel_id):
+
     cursor.execute("""
         SELECT mestre_id
         FROM mesas
@@ -87,6 +97,7 @@ def obter_mestre(channel_id):
 
 
 def eh_admin(interaction):
+
     if interaction.guild is None:
         return False
 
@@ -94,13 +105,18 @@ def eh_admin(interaction):
 
 
 def eh_mestre(interaction):
+
     return (
         obter_mestre(interaction.channel.id)
         == interaction.user.id
     )
 
 
-def buscar_ficha_jogador(channel_id, user_id):
+def buscar_ficha_jogador(
+    channel_id,
+    user_id
+):
+
     cursor.execute("""
         SELECT
             id,
@@ -120,12 +136,16 @@ def buscar_ficha_jogador(channel_id, user_id):
         AND dono_id = ?
         AND tipo = 'jogador'
         LIMIT 1
-    """, (channel_id, user_id))
+    """, (
+        channel_id,
+        user_id
+    ))
 
     return cursor.fetchone()
 
 
 def buscar_ficha(ficha_id):
+
     cursor.execute("""
         SELECT
             id,
@@ -169,56 +189,21 @@ def transformar_ficha(dados):
 
 
 # ============================================================
-# BARRAS DE HP E MANA
+# ESTADO DE HP E MANA
+# SEM BARRAS
 # ============================================================
-
-def porcentagem(atual, maximo):
-
-    if maximo <= 0:
-        return 0
-
-    return max(
-        0,
-        min(
-            100,
-            (atual / maximo) * 100
-        )
-    )
-
-
-def criar_barra(atual, maximo, tamanho=20):
-
-    if maximo <= 0:
-        preenchido = 0
-    else:
-        preenchido = round(
-            (atual / maximo) * tamanho
-        )
-
-    preenchido = max(
-        0,
-        min(tamanho, preenchido)
-    )
-
-    vazio = tamanho - preenchido
-
-    return (
-        "┃"
-        + ("█" * preenchido)
-        + ("░" * vazio)
-        + "┃"
-    )
-
 
 def estado_recurso(atual, maximo):
 
     if atual <= 0:
         return "ZERADO"
 
-    percentual = porcentagem(
-        atual,
-        maximo
-    )
+    if maximo <= 0:
+        return "ZERADO"
+
+    percentual = (
+        atual / maximo
+    ) * 100
 
     if percentual >= 70:
         return "BOM"
@@ -230,7 +215,11 @@ def estado_recurso(atual, maximo):
 
 
 def mostrar_hp(atual, maximo):
-    estado = estado_recurso(atual, maximo)
+
+    estado = estado_recurso(
+        atual,
+        maximo
+    )
 
     simbolos = {
         "BOM": "🟢",
@@ -249,8 +238,13 @@ def mostrar_hp(atual, maximo):
         f"**{estado}**"
     )
 
+
 def mostrar_mana(atual, maximo):
-    estado = estado_recurso(atual, maximo)
+
+    estado = estado_recurso(
+        atual,
+        maximo
+    )
 
     simbolos = {
         "BOM": "🔵",
@@ -268,22 +262,29 @@ def mostrar_mana(atual, maximo):
         f"{simbolo} **{atual}/{maximo}** — "
         f"**{estado}**"
     )
+
+
 # ============================================================
 # PERMISSÕES DE ALTERAÇÃO
 # ============================================================
 
-def pode_alterar_ficha(interaction, ficha):
+def pode_alterar_ficha(
+    interaction,
+    ficha
+):
 
     if eh_admin(interaction):
         return True
 
     if ficha["tipo"] == "jogador":
+
         return (
             ficha["dono_id"]
             == interaction.user.id
         )
 
     if ficha["tipo"] == "npc":
+
         return (
             ficha["mestre_id"]
             == interaction.user.id
@@ -571,7 +572,19 @@ async def criarficha(
             xp,
             aleatorio
         )
-        VALUES (?, ?, NULL, 'jogador', ?, ?, ?, ?, ?, 0, 0)
+        VALUES (
+            ?,
+            ?,
+            NULL,
+            'jogador',
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            0,
+            0
+        )
     """, (
         interaction.channel.id,
         interaction.user.id,
@@ -592,13 +605,19 @@ async def criarficha(
 
     embed.add_field(
         name="❤️ HP",
-        value=mostrar_hp(hp, hp),
+        value=mostrar_hp(
+            hp,
+            hp
+        ),
         inline=False
     )
 
     embed.add_field(
         name="💧 Mana",
-        value=mostrar_mana(mana, mana),
+        value=mostrar_mana(
+            mana,
+            mana
+        ),
         inline=False
     )
 
@@ -763,7 +782,9 @@ async def fichas(
     await interaction.response.send_message(
         embed=embed
     )
-    # ============================================================
+
+
+# ============================================================
 # APAGAR PRÓPRIA FICHA
 # ============================================================
 
@@ -1026,12 +1047,12 @@ class ValorModal(discord.ui.Modal):
                 db.commit()
 
                 await interaction.response.send_message(
-    f"💥 **{interaction.user.display_name}** "
-    f"causou **{valor} de dano** em "
-    f"**{f['nome']}**!\n\n"
-    f"💀 **{f['nome']} morreu!**\n"
-    f"❤️ HP: **0/{f['hp_max']}** — 💀 **MORTO**"
-)
+                    f"💥 **{interaction.user.display_name}** "
+                    f"causou **{valor} de dano** em "
+                    f"**{f['nome']}**!\n\n"
+                    f"💀 **{f['nome']} morreu!**\n"
+                    f"❤️ HP: **0/{f['hp_max']}** — 💀 **MORTO**"
+                )
 
                 return
 
@@ -1493,7 +1514,9 @@ async def gastarmana(
         f"💧 **Mana**\n"
         f"{mostrar_mana(nova_mana, f['mana_max'])}"
     )
-    # ============================================================
+
+
+# ============================================================
 # ADICIONAR XP
 # ============================================================
 
@@ -1530,18 +1553,19 @@ async def addxp(
         dados
     )
 
-    if not pode_alterar_ficha(
-        interaction,
-        f
-    ):
+    # O jogador só pode adicionar XP à própria ficha.
+    # Administradores podem alterar qualquer ficha.
+    if not eh_admin(interaction):
 
-        await interaction.response.send_message(
-            "❌ Você só pode alterar o XP "
-            "da sua própria ficha.",
-            ephemeral=True
-        )
+        if f["dono_id"] != interaction.user.id:
 
-        return
+            await interaction.response.send_message(
+                "❌ Você só pode alterar o XP "
+                "da sua própria ficha.",
+                ephemeral=True
+            )
+
+            return
 
     if valor <= 0:
 
@@ -1568,7 +1592,9 @@ async def addxp(
         (f["id"],)
     )
 
-    xp_atual = cursor.fetchone()[0]
+    resultado = cursor.fetchone()
+
+    xp_atual = resultado[0]
 
     await interaction.response.send_message(
         f"⭐ **{f['nome']}** recebeu "
@@ -1781,13 +1807,19 @@ async def criarnpc(
 
     embed.add_field(
         name="❤️ HP",
-        value=mostrar_hp(hp, hp),
+        value=mostrar_hp(
+            hp,
+            hp
+        ),
         inline=False
     )
 
     embed.add_field(
         name="💧 Mana",
-        value=mostrar_mana(mana, mana),
+        value=mostrar_mana(
+            mana,
+            mana
+        ),
         inline=False
     )
 
@@ -2012,7 +2044,6 @@ async def apagarnpc(
     nome: str
 ):
 
-    # Verifica se é o Mestre ou administrador
     if (
         not eh_mestre(interaction)
         and not eh_admin(interaction)
@@ -2026,7 +2057,6 @@ async def apagarnpc(
 
         return
 
-    # Procura o NPC neste canal
     cursor.execute("""
         SELECT id
         FROM fichas
@@ -2041,7 +2071,6 @@ async def apagarnpc(
 
     resultado = cursor.fetchone()
 
-    # NPC não encontrado
     if resultado is None:
 
         await interaction.response.send_message(
@@ -2052,7 +2081,6 @@ async def apagarnpc(
 
         return
 
-    # Apaga o NPC
     cursor.execute(
         "DELETE FROM fichas WHERE id = ?",
         (resultado[0],)
@@ -2060,11 +2088,12 @@ async def apagarnpc(
 
     db.commit()
 
-    # Confirmação
     await interaction.response.send_message(
         f"🗑️ O NPC **{nome}** foi apagado."
     )
-    # ============================================================
+
+
+# ============================================================
 # VER FICHA DE OUTRO JOGADOR
 # ============================================================
 
@@ -2080,7 +2109,6 @@ async def verficha(
     jogador: discord.Member
 ):
 
-    # Procura a ficha do jogador neste canal
     dados = buscar_ficha_jogador(
         interaction.channel.id,
         jogador.id
@@ -2098,7 +2126,6 @@ async def verficha(
 
     f = transformar_ficha(dados)
 
-    # Cria a ficha visível
     embed = discord.Embed(
         title=f"⚔️ {f['nome']}",
         description=(
@@ -2134,8 +2161,10 @@ async def verficha(
     await interaction.response.send_message(
         embed=embed
     )
+
+
 # ============================================================
-# COMANDO HELP
+# HELP
 # ============================================================
 
 @bot.tree.command(
@@ -2155,10 +2184,6 @@ async def help(
         color=discord.Color.dark_red()
     )
 
-    # --------------------------------------------------------
-    # COMANDOS DOS JOGADORES
-    # --------------------------------------------------------
-
     embed.add_field(
         name="👤 Jogador",
         value=(
@@ -2176,10 +2201,6 @@ async def help(
         inline=False
     )
 
-    # --------------------------------------------------------
-    # COMANDOS DO MESTRE
-    # --------------------------------------------------------
-
     embed.add_field(
         name="👑 Mestre",
         value=(
@@ -2192,10 +2213,6 @@ async def help(
         ),
         inline=False
     )
-
-    # --------------------------------------------------------
-    # COMANDOS DO ADMINISTRADOR
-    # --------------------------------------------------------
 
     embed.add_field(
         name="🛡️ Administrador",
@@ -2210,10 +2227,6 @@ async def help(
         inline=False
     )
 
-    # --------------------------------------------------------
-    # INFORMAÇÕES
-    # --------------------------------------------------------
-
     embed.set_footer(
         text="BotRPG • Sistema de fichas"
     )
@@ -2223,7 +2236,8 @@ async def help(
         ephemeral=True
     )
 
-    # ============================================================
+
+# ============================================================
 # INICIAR O BOT
 # ============================================================
 
