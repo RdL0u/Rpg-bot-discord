@@ -2044,6 +2044,76 @@ async def apagarnpc(
         f"🗑️ O NPC **{nome}** foi apagado."
     )
     # ============================================================
+# VER FICHA DE OUTRO JOGADOR
+# ============================================================
+
+@bot.tree.command(
+    name="verficha",
+    description="Visualiza individualmente a ficha de outro jogador."
+)
+@app_commands.describe(
+    jogador="Jogador cuja ficha você deseja visualizar"
+)
+async def verficha(
+    interaction: discord.Interaction,
+    jogador: discord.Member
+):
+
+    # Procura a ficha do jogador neste canal
+    dados = buscar_ficha_jogador(
+        interaction.channel.id,
+        jogador.id
+    )
+
+    if dados is None:
+
+        await interaction.response.send_message(
+            f"❌ **{jogador.display_name}** "
+            f"não possui uma ficha neste canal.",
+            ephemeral=True
+        )
+
+        return
+
+    f = transformar_ficha(dados)
+
+    # Cria a ficha visível
+    embed = discord.Embed(
+        title=f"⚔️ {f['nome']}",
+        description=(
+            f"👤 Jogador: {jogador.mention}"
+        ),
+        color=discord.Color.dark_red()
+    )
+
+    embed.add_field(
+        name="❤️ HP",
+        value=mostrar_hp(
+            f["hp_atual"],
+            f["hp_max"]
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="💧 Mana",
+        value=mostrar_mana(
+            f["mana_atual"],
+            f["mana_max"]
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="⭐ XP",
+        value=str(f["xp"]),
+        inline=False
+    )
+
+    await interaction.response.send_message(
+        embed=embed
+    )
+    # ============================================================
 # INICIAR O BOT
 # ============================================================
 
