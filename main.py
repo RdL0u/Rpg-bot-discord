@@ -1510,4 +1510,4 @@ async def apagarnpc(
 # INICIAR
 # ============================================================
 
-bot.run(TOKEN)?
+bot.run(TOKEN)
