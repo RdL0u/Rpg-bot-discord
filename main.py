@@ -165,12 +165,12 @@ bot = commands.Bot(
 # ============================================================
 
 ATRIBUTOS = {
-    "forca": ("💪", "For"),
-    "destreza": ("🏹", "Des"),
-    "vigor": ("🛡️", "Vig"),
-    "inteligencia": ("🧠", "Int"),
-    "carisma": ("🎭", "Car"),
-    "raciocinio": ("💡", "Rac")
+    "forca": ("💪", "Força"),
+    "destreza": ("🏹", "Destreza"),
+    "vigor": ("🛡️", "Vigor"),
+    "inteligencia": ("🧠", "Inteligência"),
+    "carisma": ("🎭", "Carisma"),
+    "raciocinio": ("💡", "Raciocínio")
 }
 
 
@@ -457,66 +457,128 @@ def pode_alterar_ficha(interaction, ficha):
 
 
 # ============================================================
-# TEXTO DOS ATRIBUTOS
+# TEXTO DOS ATRIBUTOS — ALINHADO
 # ============================================================
 
 def texto_atributos(f):
 
-    linhas = []
-
     itens = list(ATRIBUTOS.items())
 
-    for i in range(0, len(itens), 2):
-
-        esquerda = itens[i]
-        direita = itens[i + 1]
-
-        chave_e, (emoji_e, nome_e) = esquerda
-        chave_d, (emoji_d, nome_d) = direita
-
-        linhas.append(
-            f"{emoji_e} {nome_e}: **{f[chave_e]}**"
-            f"  "
-            f"{emoji_d} {nome_d}: **{f[chave_d]}**"
-        )
-
-    return "\n".join(linhas)
-
-
-# ============================================================
-# TEXTO DAS PERÍCIAS
-# ============================================================
-
-def texto_pericias(f):
-
     linhas = []
 
-    itens = list(PERICIAS.items())
+    largura_nome = 16
 
     for i in range(0, len(itens), 2):
 
-        esquerda = itens[i]
+        chave_e, (emoji_e, nome_e) = itens[i]
 
-        chave_e, (emoji_e, nome_e) = esquerda
+        esquerda_nome = (
+            f"{emoji_e} {nome_e}:"
+        ).ljust(largura_nome)
 
-        linha = (
-            f"{emoji_e} {nome_e}: **{f[chave_e]}**"
+        esquerda_valor = str(
+            f[chave_e]
+        ).rjust(2)
+
+        esquerda = (
+            f"{esquerda_nome} **{esquerda_valor}**"
         )
 
         if i + 1 < len(itens):
 
-            direita = itens[i + 1]
+            chave_d, (emoji_d, nome_d) = itens[i + 1]
 
-            chave_d, (emoji_d, nome_d) = direita
+            direita_nome = (
+                f"{emoji_d} {nome_d}:"
+            ).ljust(largura_nome)
 
-            linha += (
-                f"  "
-                f"{emoji_d} {nome_d}: **{f[chave_d]}**"
+            direita_valor = str(
+                f[chave_d]
+            ).rjust(2)
+
+            direita = (
+                f"{direita_nome} **{direita_valor}**"
             )
 
-        linhas.append(linha)
+            linhas.append(
+                f"{esquerda}     {direita}"
+            )
 
-    return "\n".join(linhas)
+        else:
+
+            linhas.append(esquerda)
+
+    return (
+        "```text\n"
+        + "\n".join(linhas)
+        + "\n```"
+    )
+
+
+# ============================================================
+# TEXTO DAS PERÍCIAS — ALINHADO
+# ============================================================
+
+def texto_pericias(f):
+
+    itens = list(PERICIAS.items())
+
+    linhas = []
+
+    # Divide as perícias em duas colunas
+    metade = (len(itens) + 1) // 2
+
+    coluna_esquerda = itens[:metade]
+    coluna_direita = itens[metade:]
+
+    # Espaço reservado para os nomes
+    largura_nome = 22
+
+    for i in range(metade):
+
+        chave_e, (emoji_e, nome_e) = coluna_esquerda[i]
+
+        nome_esquerda = (
+            f"{emoji_e} {nome_e}:"
+        ).ljust(largura_nome)
+
+        valor_esquerda = str(
+            f[chave_e]
+        ).rjust(2)
+
+        esquerda = (
+            f"{nome_esquerda} {valor_esquerda}"
+        )
+
+        if i < len(coluna_direita):
+
+            chave_d, (emoji_d, nome_d) = coluna_direita[i]
+
+            nome_direita = (
+                f"{emoji_d} {nome_d}:"
+            ).ljust(largura_nome)
+
+            valor_direita = str(
+                f[chave_d]
+            ).rjust(2)
+
+            direita = (
+                f"{nome_direita} {valor_direita}"
+            )
+
+            linhas.append(
+                f"{esquerda}     {direita}"
+            )
+
+        else:
+
+            linhas.append(esquerda)
+
+    return (
+        "```text\n"
+        + "\n".join(linhas)
+        + "\n```"
+    )
 
 
 # ============================================================
@@ -535,30 +597,44 @@ def criar_pagina_status(f, jogador=None):
 
         embed.description = (
             f"Jogador: {jogador.mention}\n\n"
+
             f"**❤️ STATUS**\n\n"
-            f"> ❤️ HP: **{f['hp_atual']}/{f['hp_max']}**"
-            f"  "
-            f"🔵 Mana: **{f['mana_atual']}/{f['mana_max']}**\n"
-            f"> ✨ XP: **{f['xp']}**"
-            f"  "
+
+            f"❤️ HP: "
+            f"**{f['hp_atual']}/{f['hp_max']}**\n"
+
+            f"🔵 Mana: "
+            f"**{f['mana_atual']}/{f['mana_max']}**\n"
+
+            f"✨ XP: **{f['xp']}**\n"
+
             f"⚡ RC: **{calcular_rc(f)}**\n\n"
+
             f"**⚔️ ATRIBUTOS**\n\n"
-            f"> {texto_atributos(f).replace(chr(10), chr(10) + '> ')}"
+
+            f"{texto_atributos(f)}"
         )
 
     else:
 
         embed.description = (
             f"**👹 NPC**\n\n"
+
             f"**❤️ STATUS**\n\n"
-            f"> ❤️ HP: **{f['hp_atual']}/{f['hp_max']}**"
-            f"  "
-            f"🔵 Mana: **{f['mana_atual']}/{f['mana_max']}**\n"
-            f"> ✨ XP: **{f['xp']}**"
-            f"  "
+
+            f"❤️ HP: "
+            f"**{f['hp_atual']}/{f['hp_max']}**\n"
+
+            f"🔵 Mana: "
+            f"**{f['mana_atual']}/{f['mana_max']}**\n"
+
+            f"✨ XP: **{f['xp']}**\n"
+
             f"⚡ RC: **{calcular_rc(f)}**\n\n"
+
             f"**⚔️ ATRIBUTOS**\n\n"
-            f"> {texto_atributos(f).replace(chr(10), chr(10) + '> ')}"
+
+            f"{texto_atributos(f)}"
         )
 
     embed.set_footer(
@@ -580,16 +656,9 @@ def criar_pagina_pericias(f):
         color=discord.Color.dark_red()
     )
 
-    texto = texto_pericias(f)
-
-    texto = "> " + texto.replace(
-        "\n",
-        "\n> "
-    )
-
     embed.description = (
         "**📚 PERÍCIAS**\n\n"
-        f"{texto}"
+        f"{texto_pericias(f)}"
     )
 
     embed.set_footer(
@@ -1076,7 +1145,6 @@ async def verficha(
 
 # ============================================================
 # DEFINIR / ALTERAR ATRIBUTO
-# COMANDO SIMPLES
 # ============================================================
 
 @bot.tree.command(
@@ -1089,12 +1157,30 @@ async def verficha(
 )
 @app_commands.choices(
     atributo=[
-        app_commands.Choice(name="Força", value="forca"),
-        app_commands.Choice(name="Destreza", value="destreza"),
-        app_commands.Choice(name="Vigor", value="vigor"),
-        app_commands.Choice(name="Inteligência", value="inteligencia"),
-        app_commands.Choice(name="Carisma", value="carisma"),
-        app_commands.Choice(name="Raciocínio", value="raciocinio")
+        app_commands.Choice(
+            name="Força",
+            value="forca"
+        ),
+        app_commands.Choice(
+            name="Destreza",
+            value="destreza"
+        ),
+        app_commands.Choice(
+            name="Vigor",
+            value="vigor"
+        ),
+        app_commands.Choice(
+            name="Inteligência",
+            value="inteligencia"
+        ),
+        app_commands.Choice(
+            name="Carisma",
+            value="carisma"
+        ),
+        app_commands.Choice(
+            name="Raciocínio",
+            value="raciocinio"
+        )
     ]
 )
 async def atributo(
@@ -1154,7 +1240,6 @@ async def atributo(
 
 # ============================================================
 # DEFINIR / ALTERAR PERÍCIA
-# COMANDO SIMPLES
 # ============================================================
 
 @bot.tree.command(
@@ -1167,29 +1252,98 @@ async def atributo(
 )
 @app_commands.choices(
     pericia=[
-        app_commands.Choice(name="Acadêmicos", value="academicos"),
-        app_commands.Choice(name="Idiomas", value="idiomas"),
-        app_commands.Choice(name="Ofícios", value="oficios"),
-        app_commands.Choice(name="Armas Brancas", value="armas_brancas"),
-        app_commands.Choice(name="Intimidação", value="intimidacao"),
-        app_commands.Choice(name="Ocultismo", value="ocultismo"),
-        app_commands.Choice(name="Briga", value="briga"),
-        app_commands.Choice(name="Investigação", value="investigacao"),
-        app_commands.Choice(name="Persuasão", value="persuasao"),
-        app_commands.Choice(name="Ciências", value="ciencias"),
-        app_commands.Choice(name="Lábia", value="labia"),
-        app_commands.Choice(name="Prontidão", value="prontidao"),
-        app_commands.Choice(name="Conhec. Gerais", value="conhecimentos_gerais"),
-        app_commands.Choice(name="Liderança", value="lideranca"),
-        app_commands.Choice(name="Sobrevivência", value="sobrevivencia"),
-        app_commands.Choice(name="Condução", value="conducao"),
-        app_commands.Choice(name="Manha", value="manha"),
-        app_commands.Choice(name="Tecnologia", value="tecnologia"),
-        app_commands.Choice(name="Esportes", value="esportes"),
-        app_commands.Choice(name="Medicina", value="medicina"),
-        app_commands.Choice(name="Mira", value="mira"),
-        app_commands.Choice(name="Esquiva", value="esquiva"),
-        app_commands.Choice(name="Furtividade", value="furtividade")
+        app_commands.Choice(
+            name="Acadêmicos",
+            value="academicos"
+        ),
+        app_commands.Choice(
+            name="Idiomas",
+            value="idiomas"
+        ),
+        app_commands.Choice(
+            name="Ofícios",
+            value="oficios"
+        ),
+        app_commands.Choice(
+            name="Armas Brancas",
+            value="armas_brancas"
+        ),
+        app_commands.Choice(
+            name="Intimidação",
+            value="intimidacao"
+        ),
+        app_commands.Choice(
+            name="Ocultismo",
+            value="ocultismo"
+        ),
+        app_commands.Choice(
+            name="Briga",
+            value="briga"
+        ),
+        app_commands.Choice(
+            name="Investigação",
+            value="investigacao"
+        ),
+        app_commands.Choice(
+            name="Persuasão",
+            value="persuasao"
+        ),
+        app_commands.Choice(
+            name="Ciências",
+            value="ciencias"
+        ),
+        app_commands.Choice(
+            name="Lábia",
+            value="labia"
+        ),
+        app_commands.Choice(
+            name="Prontidão",
+            value="prontidao"
+        ),
+        app_commands.Choice(
+            name="Conhec. Gerais",
+            value="conhecimentos_gerais"
+        ),
+        app_commands.Choice(
+            name="Liderança",
+            value="lideranca"
+        ),
+        app_commands.Choice(
+            name="Sobrevivência",
+            value="sobrevivencia"
+        ),
+        app_commands.Choice(
+            name="Condução",
+            value="conducao"
+        ),
+        app_commands.Choice(
+            name="Manha",
+            value="manha"
+        ),
+        app_commands.Choice(
+            name="Tecnologia",
+            value="tecnologia"
+        ),
+        app_commands.Choice(
+            name="Esportes",
+            value="esportes"
+        ),
+        app_commands.Choice(
+            name="Medicina",
+            value="medicina"
+        ),
+        app_commands.Choice(
+            name="Mira",
+            value="mira"
+        ),
+        app_commands.Choice(
+            name="Esquiva",
+            value="esquiva"
+        ),
+        app_commands.Choice(
+            name="Furtividade",
+            value="furtividade"
+        )
     ]
 )
 async def pericia(
@@ -1253,7 +1407,7 @@ async def pericia(
 
 @bot.tree.command(
     name="alterarficha",
-    description="Altera HP e Mana máximos da sua ficha."
+    description="Altera HP e Mana máximos da ficha."
 )
 @app_commands.describe(
     jogador="Jogador da ficha",
@@ -2005,18 +2159,28 @@ async def npcs(
 
         return
 
+    # Responde primeiro
+    primeiro = True
+
     for dados in resultados:
 
         f = transformar_ficha(dados)
 
-        await interaction.followup.send(
-            embed=criar_pagina_status(f),
-            view=FichaView(f)
-        ) if interaction.response.is_done() else await interaction.response.send_message(
-            embed=criar_pagina_status(f),
-            view=FichaView(f),
-            ephemeral=True
-        )
+        if primeiro:
+
+            await interaction.response.send_message(
+                embed=criar_pagina_status(f),
+                view=FichaView(f)
+            )
+
+            primeiro = False
+
+        else:
+
+            await interaction.followup.send(
+                embed=criar_pagina_status(f),
+                view=FichaView(f)
+            )
 
 
 # ============================================================
