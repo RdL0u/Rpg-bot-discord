@@ -1,10 +1,11 @@
 import os
-import sqlite3
 import random
 import discord
 
 from discord.ext import commands
 from discord import app_commands
+
+from database import db, cursor
 
 
 # ============================================================
