@@ -22,14 +22,7 @@ if not TOKEN:
 # ============================================================
 
 db = sqlite3.connect("rpg_fichas.db")
-
-# IMPORTANTE:
-# Faz o SQLite retornar as linhas identificadas pelo nome
-# das colunas, evitando troca de atributos/perícias.
-db.row_factory = sqlite3.Row
-
 cursor = db.cursor()
-
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS mesas (
@@ -37,7 +30,6 @@ CREATE TABLE IF NOT EXISTS mesas (
     mestre_id INTEGER
 )
 """)
-
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS fichas (
@@ -99,23 +91,16 @@ db.commit()
 # ============================================================
 
 def adicionar_coluna_se_nao_existir(nome_coluna):
-
     cursor.execute("PRAGMA table_info(fichas)")
-
-    colunas = [
-        coluna[1]
-        for coluna in cursor.fetchall()
-    ]
+    colunas = [coluna[1] for coluna in cursor.fetchall()]
 
     if nome_coluna not in colunas:
-
         cursor.execute(
             f"""
             ALTER TABLE fichas
             ADD COLUMN {nome_coluna} INTEGER NOT NULL DEFAULT 0
             """
         )
-
         db.commit()
 
 
@@ -151,7 +136,6 @@ COLUNAS_NOVAS = [
     "furtividade"
 ]
 
-
 for coluna in COLUNAS_NOVAS:
     adicionar_coluna_se_nao_existir(coluna)
 
@@ -179,6 +163,16 @@ ATRIBUTOS = {
     "inteligencia": ("🧠", "Int"),
     "carisma": ("🎭", "Car"),
     "raciocinio": ("💡", "Rac")
+}
+
+
+ATRIBUTOS_NOMES = {
+    "forca": "Força",
+    "destreza": "Destreza",
+    "vigor": "Vigor",
+    "inteligencia": "Inteligência",
+    "carisma": "Carisma",
+    "raciocinio": "Raciocínio"
 }
 
 
@@ -216,11 +210,38 @@ ORDEM_PERICIAS = list(PERICIAS.keys())
 
 
 # ============================================================
+# NOMES ALEATÓRIOS DE NPC
+# ============================================================
+
+NOMES_NPC = [
+    "Goblin",
+    "Orc",
+    "Esqueleto",
+    "Bandido",
+    "Lobo",
+    "Zumbi",
+    "Slime",
+    "Aranha Gigante",
+    "Cultista",
+    "Guardião",
+    "Golem",
+    "Morcego Gigante",
+    "Troll",
+    "Ladrão",
+    "Cavaleiro Sombrio",
+    "Mercenário",
+    "Caçador",
+    "Demônio",
+    "Criatura Sombria",
+    "Soldado"
+]
+
+
+# ============================================================
 # FUNÇÕES AUXILIARES
 # ============================================================
 
 def garantir_mesa(channel_id):
-
     cursor.execute("""
         INSERT OR IGNORE INTO mesas (
             channel_id,
@@ -233,7 +254,6 @@ def garantir_mesa(channel_id):
 
 
 def obter_mestre(channel_id):
-
     cursor.execute("""
         SELECT mestre_id
         FROM mesas
@@ -243,13 +263,12 @@ def obter_mestre(channel_id):
     resultado = cursor.fetchone()
 
     if resultado:
-        return resultado["mestre_id"]
+        return resultado[0]
 
     return None
 
 
 def eh_admin(interaction):
-
     if interaction.guild is None:
         return False
 
@@ -257,7 +276,6 @@ def eh_admin(interaction):
 
 
 def eh_mestre(interaction):
-
     return (
         obter_mestre(interaction.channel.id)
         == interaction.user.id
@@ -265,7 +283,6 @@ def eh_mestre(interaction):
 
 
 def buscar_ficha_jogador(channel_id, user_id):
-
     cursor.execute("""
         SELECT *
         FROM fichas
@@ -282,7 +299,6 @@ def buscar_ficha_jogador(channel_id, user_id):
 
 
 def buscar_ficha(ficha_id):
-
     cursor.execute("""
         SELECT *
         FROM fichas
@@ -292,35 +308,67 @@ def buscar_ficha(ficha_id):
     return cursor.fetchone()
 
 
-# ============================================================
-# CORREÇÃO PRINCIPAL
-# ============================================================
-
 def transformar_ficha(dados):
-
     if dados is None:
         return None
 
-    # Como o banco utiliza sqlite3.Row, cada valor é obtido
-    # pelo NOME da coluna e não pela posição.
-    #
-    # Isso impede que uma alteração em uma perícia seja
-    # interpretada como alteração em outra perícia ou atributo.
+    colunas = [
+        "id",
+        "channel_id",
+        "dono_id",
+        "mestre_id",
+        "tipo",
+        "nome",
+        "hp_atual",
+        "hp_max",
+        "mana_atual",
+        "mana_max",
+        "xp",
+
+        "forca",
+        "destreza",
+        "vigor",
+        "inteligencia",
+        "carisma",
+        "raciocinio",
+
+        "academicos",
+        "idiomas",
+        "oficios",
+        "armas_brancas",
+        "intimidacao",
+        "ocultismo",
+        "briga",
+        "investigacao",
+        "persuasao",
+        "ciencias",
+        "labia",
+        "prontidao",
+        "conhecimentos_gerais",
+        "lideranca",
+        "sobrevivencia",
+        "conducao",
+        "manha",
+        "tecnologia",
+        "esportes",
+        "medicina",
+        "mira",
+        "esquiva",
+        "furtividade",
+
+        "aleatorio"
+    ]
 
     ficha = {}
 
-    for coluna in dados.keys():
-        ficha[coluna] = dados[coluna]
+    for indice, coluna in enumerate(colunas):
+        if indice < len(dados):
+            ficha[coluna] = dados[indice]
 
     return ficha
 
 
-# ============================================================
-# REFLEXO DE COMBATE
-# ============================================================
-
 def calcular_rc(ficha):
-
     return (
         ficha["esquiva"]
         + ficha["destreza"]
@@ -328,12 +376,7 @@ def calcular_rc(ficha):
     )
 
 
-# ============================================================
-# ESTADO DOS RECURSOS
-# ============================================================
-
 def estado_recurso(atual, maximo):
-
     if atual <= 0 or maximo <= 0:
         return "ZERADO"
 
@@ -348,6 +391,25 @@ def estado_recurso(atual, maximo):
     return "CRÍTICO"
 
 
+def pode_alterar_ficha(interaction, ficha):
+
+    if eh_admin(interaction):
+        return True
+
+    if ficha["tipo"] == "jogador":
+        return (
+            ficha["dono_id"] == interaction.user.id
+            or eh_mestre(interaction)
+        )
+
+    if ficha["tipo"] == "npc":
+        return (
+            ficha["mestre_id"] == interaction.user.id
+        )
+
+    return False
+
+
 # ============================================================
 # PÁGINA 1
 # STATUS + ATRIBUTOS
@@ -360,42 +422,26 @@ def criar_pagina_status(f, jogador=None):
         color=discord.Color.dark_red()
     )
 
-    # --------------------------------------------------------
-    # IDENTIFICAÇÃO
-    # --------------------------------------------------------
-
     if jogador:
         identificacao = f"Jogador: {jogador.mention}"
     else:
         identificacao = "👹 NPC"
 
-    # --------------------------------------------------------
-    # STATUS
-    # --------------------------------------------------------
-
     status = (
-        f"❤️ HP: **{f['hp_atual']}/{f['hp_max']}**  "
+        f"❤️ HP: **{f['hp_atual']}/{f['hp_max']}**    "
         f"🔵 Mana: **{f['mana_atual']}/{f['mana_max']}**\n"
-        f"✨ XP: **{f['xp']}**  "
+        f"✨ XP: **{f['xp']}**    "
         f"⚡ RC: **{calcular_rc(f)}**"
     )
 
-    # --------------------------------------------------------
-    # ATRIBUTOS
-    # --------------------------------------------------------
-
     atributos = (
-        f"💪 For: **{f['forca']}**  "
+        f"💪 For: **{f['forca']}**    "
         f"🏹 Des: **{f['destreza']}**\n"
-        f"🛡️ Vig: **{f['vigor']}**  "
+        f"🛡️ Vig: **{f['vigor']}**    "
         f"🧠 Int: **{f['inteligencia']}**\n"
-        f"🎭 Car: **{f['carisma']}**  "
+        f"🎭 Car: **{f['carisma']}**    "
         f"💡 Rac: **{f['raciocinio']}**"
     )
-
-    # --------------------------------------------------------
-    # DESCRIÇÃO
-    # --------------------------------------------------------
 
     embed.description = (
         f"{identificacao}\n\n"
@@ -414,7 +460,7 @@ def criar_pagina_status(f, jogador=None):
 
 # ============================================================
 # PÁGINA 2
-# PERÍCIAS
+# PERÍCIAS EM 2 COLUNAS
 # ============================================================
 
 def criar_pagina_pericias(f):
@@ -424,19 +470,39 @@ def criar_pagina_pericias(f):
         color=discord.Color.dark_red()
     )
 
-    linhas = []
+    metade = (len(ORDEM_PERICIAS) + 1) // 2
 
-    for chave, (emoji, nome) in PERICIAS.items():
+    coluna_esquerda = ORDEM_PERICIAS[:metade]
+    coluna_direita = ORDEM_PERICIAS[metade:]
 
-        linhas.append(
+    texto_esquerda = []
+
+    for chave in coluna_esquerda:
+        emoji, nome = PERICIAS[chave]
+
+        texto_esquerda.append(
             f"{emoji} {nome}: **{f[chave]}**"
         )
 
-    texto = "\n".join(linhas)
+    texto_direita = []
 
-    embed.description = (
-        "📚 **PERÍCIAS**\n\n"
-        f"{texto}"
+    for chave in coluna_direita:
+        emoji, nome = PERICIAS[chave]
+
+        texto_direita.append(
+            f"{emoji} {nome}: **{f[chave]}**"
+        )
+
+    embed.add_field(
+        name="📚 Perícias",
+        value="\n".join(texto_esquerda),
+        inline=True
+    )
+
+    embed.add_field(
+        name="📚 Perícias",
+        value="\n".join(texto_direita),
+        inline=True
     )
 
     embed.set_footer(
@@ -453,7 +519,6 @@ def criar_pagina_pericias(f):
 class FichaView(discord.ui.View):
 
     def __init__(self, ficha, jogador=None):
-
         super().__init__(timeout=120)
 
         self.ficha = ficha
@@ -496,30 +561,766 @@ class FichaView(discord.ui.View):
 
 
 # ============================================================
-# PERMISSÃO PARA ALTERAR FICHA
+# MODAL — DADOS BÁSICOS DO NPC
 # ============================================================
 
-def pode_alterar_ficha(interaction, ficha):
+class NPCBasicoModal(discord.ui.Modal):
 
-    if eh_admin(interaction):
-        return True
-
-    if ficha["tipo"] == "jogador":
-
-        return (
-            ficha["dono_id"]
-            == interaction.user.id
-            or eh_mestre(interaction)
+    def __init__(self, criacao):
+        super().__init__(
+            title="Dados básicos do NPC"
         )
 
-    if ficha["tipo"] == "npc":
+        self.criacao = criacao
 
-        return (
-            ficha["mestre_id"]
-            == interaction.user.id
+        self.nome = discord.ui.TextInput(
+            label="Nome do NPC",
+            placeholder="Ex: Goblin Guerreiro",
+            required=True,
+            max_length=50
         )
 
-    return False
+        self.hp = discord.ui.TextInput(
+            label="HP",
+            placeholder="Ex: 100",
+            required=True,
+            max_length=6
+        )
+
+        self.mana = discord.ui.TextInput(
+            label="Mana",
+            placeholder="Ex: 50",
+            required=True,
+            max_length=6
+        )
+
+        self.add_item(self.nome)
+        self.add_item(self.hp)
+        self.add_item(self.mana)
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        try:
+            hp = int(str(self.hp.value))
+            mana = int(str(self.mana.value))
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ HP e Mana precisam ser números.",
+                ephemeral=True
+            )
+
+            return
+
+        if hp <= 0:
+            await interaction.response.send_message(
+                "❌ O HP precisa ser maior que 0.",
+                ephemeral=True
+            )
+            return
+
+        if mana < 0:
+            await interaction.response.send_message(
+                "❌ A Mana não pode ser negativa.",
+                ephemeral=True
+            )
+            return
+
+        self.criacao.nome = str(self.nome.value)[:50]
+        self.criacao.hp = hp
+        self.criacao.mana = mana
+
+        await interaction.response.edit_message(
+            content=(
+                "⚔️ **ETAPA 2/3 — ATRIBUTOS**\n\n"
+                "Deseja gerar os atributos do NPC "
+                "aleatoriamente?"
+            ),
+            embed=None,
+            view=NPCAtributosView(self.criacao)
+        )
+
+
+# ============================================================
+# VIEW — DADOS BÁSICOS
+# ============================================================
+
+class NPCBasicoView(discord.ui.View):
+
+    def __init__(self, criacao):
+        super().__init__(timeout=300)
+
+        self.criacao = criacao
+
+    @discord.ui.button(
+        label="🎲 Aleatório",
+        style=discord.ButtonStyle.primary
+    )
+    async def aleatorio(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        self.criacao.nome = random.choice(NOMES_NPC)
+        self.criacao.hp = random.randint(20, 150)
+        self.criacao.mana = random.randint(0, 100)
+
+        await interaction.response.edit_message(
+            content=(
+                "⚔️ **ETAPA 2/3 — ATRIBUTOS**\n\n"
+                "Deseja gerar os atributos do NPC "
+                "aleatoriamente?"
+            ),
+            view=NPCAtributosView(self.criacao)
+        )
+
+    @discord.ui.button(
+        label="✏️ Personalizado",
+        style=discord.ButtonStyle.success
+    )
+    async def personalizado(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            NPCBasicoModal(self.criacao)
+        )
+
+
+# ============================================================
+# MODAL — ATRIBUTOS
+# ============================================================
+
+class NPCAtributosModal1(discord.ui.Modal):
+
+    def __init__(self, criacao):
+        super().__init__(
+            title="Atributos — Parte 1/2"
+        )
+
+        self.criacao = criacao
+
+        self.forca = discord.ui.TextInput(
+            label="Força",
+            placeholder="0",
+            required=True,
+            max_length=3
+        )
+
+        self.destreza = discord.ui.TextInput(
+            label="Destreza",
+            placeholder="0",
+            required=True,
+            max_length=3
+        )
+
+        self.vigor = discord.ui.TextInput(
+            label="Vigor",
+            placeholder="0",
+            required=True,
+            max_length=3
+        )
+
+        self.inteligencia = discord.ui.TextInput(
+            label="Inteligência",
+            placeholder="0",
+            required=True,
+            max_length=3
+        )
+
+        self.carisma = discord.ui.TextInput(
+            label="Carisma",
+            placeholder="0",
+            required=True,
+            max_length=3
+        )
+
+        self.add_item(self.forca)
+        self.add_item(self.destreza)
+        self.add_item(self.vigor)
+        self.add_item(self.inteligencia)
+        self.add_item(self.carisma)
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        try:
+
+            valores = {
+                "forca": int(str(self.forca.value)),
+                "destreza": int(str(self.destreza.value)),
+                "vigor": int(str(self.vigor.value)),
+                "inteligencia": int(str(self.inteligencia.value)),
+                "carisma": int(str(self.carisma.value))
+            }
+
+            if any(valor < 0 for valor in valores.values()):
+                raise ValueError
+
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ Os atributos precisam ser números iguais ou maiores que 0.",
+                ephemeral=True
+            )
+
+            return
+
+        self.criacao.atributos.update(valores)
+
+        await interaction.response.send_modal(
+            NPCAtributosModal2(self.criacao)
+        )
+
+
+class NPCAtributosModal2(discord.ui.Modal):
+
+    def __init__(self, criacao):
+        super().__init__(
+            title="Atributos — Parte 2/2"
+        )
+
+        self.criacao = criacao
+
+        self.raciocinio = discord.ui.TextInput(
+            label="Raciocínio",
+            placeholder="0",
+            required=True,
+            max_length=3
+        )
+
+        self.add_item(self.raciocinio)
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        try:
+            raciocinio = int(str(self.raciocinio.value))
+
+            if raciocinio < 0:
+                raise ValueError
+
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ O valor precisa ser um número igual ou maior que 0.",
+                ephemeral=True
+            )
+
+            return
+
+        self.criacao.atributos["raciocinio"] = raciocinio
+
+        await interaction.response.edit_message(
+            content=(
+                "📚 **ETAPA 3/3 — PERÍCIAS**\n\n"
+                "Deseja gerar as perícias do NPC "
+                "aleatoriamente?"
+            ),
+            embed=None,
+            view=NPCPericiasView(self.criacao)
+        )
+
+
+# ============================================================
+# VIEW — ATRIBUTOS
+# ============================================================
+
+class NPCAtributosView(discord.ui.View):
+
+    def __init__(self, criacao):
+        super().__init__(timeout=300)
+
+        self.criacao = criacao
+
+    @discord.ui.button(
+        label="🎲 Sim, aleatórios",
+        style=discord.ButtonStyle.primary
+    )
+    async def aleatorios(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        for chave in ATRIBUTOS:
+            self.criacao.atributos[chave] = random.randint(0, 5)
+
+        await interaction.response.edit_message(
+            content=(
+                "📚 **ETAPA 3/3 — PERÍCIAS**\n\n"
+                "Deseja gerar as perícias do NPC "
+                "aleatoriamente?"
+            ),
+            view=NPCPericiasView(self.criacao)
+        )
+
+    @discord.ui.button(
+        label="✏️ Não, personalizados",
+        style=discord.ButtonStyle.success
+    )
+    async def personalizados(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            NPCAtributosModal1(self.criacao)
+        )
+
+
+# ============================================================
+# MODAL — PERÍCIAS
+# ============================================================
+
+class NPCPericiasModal(discord.ui.Modal):
+
+    def __init__(
+        self,
+        criacao,
+        chaves,
+        numero,
+        total
+    ):
+
+        super().__init__(
+            title=f"Perícias {numero}/{total}"
+        )
+
+        self.criacao = criacao
+        self.chaves = chaves
+
+        for chave in chaves:
+
+            _, nome = PERICIAS[chave]
+
+            campo = discord.ui.TextInput(
+                label=nome[:45],
+                placeholder="0",
+                required=True,
+                max_length=3
+            )
+
+            setattr(
+                self,
+                f"campo_{chave}",
+                campo
+            )
+
+            self.add_item(campo)
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        try:
+
+            for chave in self.chaves:
+
+                campo = getattr(
+                    self,
+                    f"campo_{chave}"
+                )
+
+                valor = int(str(campo.value))
+
+                if valor < 0:
+                    raise ValueError
+
+                self.criacao.pericias[chave] = valor
+
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ Todos os valores precisam ser números iguais ou maiores que 0.",
+                ephemeral=True
+            )
+
+            return
+
+        self.criacao.pericias_preenchidas.update(
+            self.chaves
+        )
+
+        proxima = self.criacao.proxima_parte_pericias()
+
+        if proxima:
+
+            numero, chaves, total = proxima
+
+            await interaction.response.send_modal(
+                NPCPericiasModal(
+                    self.criacao,
+                    chaves,
+                    numero,
+                    total
+                )
+            )
+
+            return
+
+        await interaction.response.edit_message(
+            content=(
+                "✅ **Criação concluída!**\n\n"
+                "Confira a ficha abaixo antes de criar o NPC."
+            ),
+            embed=self.criacao.criar_embed_previa(),
+            view=NPCConfirmacaoView(self.criacao)
+        )
+
+
+# ============================================================
+# VIEW — PERÍCIAS
+# ============================================================
+
+class NPCPericiasView(discord.ui.View):
+
+    def __init__(self, criacao):
+        super().__init__(timeout=300)
+
+        self.criacao = criacao
+
+    @discord.ui.button(
+        label="🎲 Sim, aleatórias",
+        style=discord.ButtonStyle.primary
+    )
+    async def aleatorias(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        for chave in PERICIAS:
+            self.criacao.pericias[chave] = random.randint(0, 5)
+
+        await interaction.response.edit_message(
+            content=(
+                "✅ **Criação concluída!**\n\n"
+                "Confira a ficha abaixo antes de criar o NPC."
+            ),
+            embed=self.criacao.criar_embed_previa(),
+            view=NPCConfirmacaoView(self.criacao)
+        )
+
+    @discord.ui.button(
+        label="✏️ Não, personalizadas",
+        style=discord.ButtonStyle.success
+    )
+    async def personalizadas(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        partes = []
+
+        for i in range(0, len(ORDEM_PERICIAS), 5):
+
+            partes.append(
+                ORDEM_PERICIAS[i:i + 5]
+            )
+
+        self.criacao.pericias_partes = partes
+
+        primeira = partes[0]
+
+        await interaction.response.send_modal(
+            NPCPericiasModal(
+                self.criacao,
+                primeira,
+                1,
+                len(partes)
+            )
+        )
+
+
+# ============================================================
+# ESTADO DA CRIAÇÃO DO NPC
+# ============================================================
+
+class CriacaoNPC:
+
+    def __init__(
+        self,
+        interaction
+    ):
+
+        self.channel_id = interaction.channel.id
+        self.mestre_id = interaction.user.id
+
+        self.nome = ""
+        self.hp = 0
+        self.mana = 0
+
+        self.atributos = {
+            chave: 0
+            for chave in ATRIBUTOS
+        }
+
+        self.pericias = {
+            chave: 0
+            for chave in PERICIAS
+        }
+
+        self.pericias_partes = []
+        self.pericias_preenchidas = set()
+
+    def proxima_parte_pericias(self):
+
+        if not self.pericias_partes:
+            return None
+
+        for indice, parte in enumerate(
+            self.pericias_partes
+        ):
+
+            if not all(
+                chave in self.pericias_preenchidas
+                for chave in parte
+            ):
+
+                return (
+                    indice + 1,
+                    parte,
+                    len(self.pericias_partes)
+                )
+
+        return None
+
+    def criar_embed_previa(self):
+
+        rc = (
+            self.pericias["esquiva"]
+            + self.atributos["destreza"]
+            + 5
+        )
+
+        embed = discord.Embed(
+            title=f"👹 NPC — {self.nome.upper()}",
+            color=discord.Color.dark_red()
+        )
+
+        status = (
+            f"❤️ HP: **{self.hp}/{self.hp}**    "
+            f"🔵 Mana: **{self.mana}/{self.mana}**\n"
+            f"✨ XP: **0**    "
+            f"⚡ RC: **{rc}**"
+        )
+
+        atributos = (
+            f"💪 For: **{self.atributos['forca']}**    "
+            f"🏹 Des: **{self.atributos['destreza']}**\n"
+            f"🛡️ Vig: **{self.atributos['vigor']}**    "
+            f"🧠 Int: **{self.atributos['inteligencia']}**\n"
+            f"🎭 Car: **{self.atributos['carisma']}**    "
+            f"💡 Rac: **{self.atributos['raciocinio']}**"
+        )
+
+        embed.description = (
+            "👹 **NPC**\n\n"
+            "❤️ **STATUS**\n"
+            f"{status}\n\n"
+            "⚔️ **ATRIBUTOS**\n"
+            f"{atributos}"
+        )
+
+        metade = (
+            len(ORDEM_PERICIAS) + 1
+        ) // 2
+
+        esquerda = ORDEM_PERICIAS[:metade]
+        direita = ORDEM_PERICIAS[metade:]
+
+        texto_esquerda = []
+
+        for chave in esquerda:
+
+            emoji, nome = PERICIAS[chave]
+
+            texto_esquerda.append(
+                f"{emoji} {nome}: **{self.pericias[chave]}**"
+            )
+
+        texto_direita = []
+
+        for chave in direita:
+
+            emoji, nome = PERICIAS[chave]
+
+            texto_direita.append(
+                f"{emoji} {nome}: **{self.pericias[chave]}**"
+            )
+
+        embed.add_field(
+            name="📚 Perícias",
+            value="\n".join(texto_esquerda),
+            inline=True
+        )
+
+        embed.add_field(
+            name="📚 Perícias",
+            value="\n".join(texto_direita),
+            inline=True
+        )
+
+        embed.set_footer(
+            text="Prévia do NPC • Confira antes de criar"
+        )
+
+        return embed
+
+
+# ============================================================
+# CONFIRMAÇÃO DO NPC
+# ============================================================
+
+class NPCConfirmacaoView(discord.ui.View):
+
+    def __init__(self, criacao):
+        super().__init__(timeout=300)
+
+        self.criacao = criacao
+
+    @discord.ui.button(
+        label="✅ Criar NPC",
+        style=discord.ButtonStyle.success
+    )
+    async def criar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        if (
+            interaction.user.id
+            != self.criacao.mestre_id
+            and not eh_admin(interaction)
+        ):
+
+            await interaction.response.send_message(
+                "❌ Somente o Mestre que iniciou a criação ou um administrador pode confirmar.",
+                ephemeral=True
+            )
+
+            return
+
+        garantir_mesa(
+            self.criacao.channel_id
+        )
+
+        mestre_id = obter_mestre(
+            self.criacao.channel_id
+        )
+
+        if mestre_id is None:
+            mestre_id = self.criacao.mestre_id
+
+            cursor.execute("""
+                UPDATE mesas
+                SET mestre_id = ?
+                WHERE channel_id = ?
+            """, (
+                mestre_id,
+                self.criacao.channel_id
+            ))
+
+        colunas = (
+            list(ATRIBUTOS.keys())
+            + ORDEM_PERICIAS
+        )
+
+        valores = (
+            [
+                self.criacao.atributos[chave]
+                for chave in ATRIBUTOS
+            ]
+            +
+            [
+                self.criacao.pericias[chave]
+                for chave in ORDEM_PERICIAS
+            ]
+        )
+
+        placeholders = ", ".join(
+            ["?"] * len(valores)
+        )
+
+        cursor.execute(
+            f"""
+            INSERT INTO fichas (
+                channel_id,
+                dono_id,
+                mestre_id,
+                tipo,
+                nome,
+                hp_atual,
+                hp_max,
+                mana_atual,
+                mana_max,
+                xp,
+                {", ".join(colunas)},
+                aleatorio
+            )
+            VALUES (
+                ?, NULL, ?, 'npc', ?,
+                ?, ?, ?, ?, 0,
+                {placeholders},
+                0
+            )
+            """,
+            [
+                self.criacao.channel_id,
+                mestre_id,
+                self.criacao.nome,
+                self.criacao.hp,
+                self.criacao.hp,
+                self.criacao.mana,
+                self.criacao.mana
+            ]
+            + valores
+        )
+
+        db.commit()
+
+        dados = cursor.lastrowid
+
+        ficha = buscar_ficha(dados)
+
+        ficha = transformar_ficha(ficha)
+
+        await interaction.response.edit_message(
+            content="👹 **NPC criado com sucesso!**",
+            embed=criar_pagina_status(ficha),
+            view=FichaView(ficha)
+        )
+
+    @discord.ui.button(
+        label="❌ Cancelar",
+        style=discord.ButtonStyle.danger
+    )
+    async def cancelar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.edit_message(
+            content="❌ Criação do NPC cancelada.",
+            embed=None,
+            view=None
+        )
 
 
 # ============================================================
@@ -529,7 +1330,9 @@ def pode_alterar_ficha(interaction, ficha):
 @bot.event
 async def on_ready():
 
-    print(f"Bot conectado como {bot.user}")
+    print(
+        f"Bot conectado como {bot.user}"
+    )
 
     try:
 
@@ -945,20 +1748,16 @@ async def atributo(
 
         return
 
+    f = transformar_ficha(dados)
+
     coluna = atributo.value
 
-    # Segurança adicional:
-    # somente colunas previamente definidas podem ser alteradas.
     if coluna not in ATRIBUTOS:
-
         await interaction.response.send_message(
             "❌ Atributo inválido.",
             ephemeral=True
         )
-
         return
-
-    ficha = transformar_ficha(dados)
 
     cursor.execute(
         f"""
@@ -968,7 +1767,7 @@ async def atributo(
         """,
         (
             valor,
-            ficha["id"]
+            f["id"]
         )
     )
 
@@ -1048,20 +1847,16 @@ async def pericia(
 
         return
 
+    f = transformar_ficha(dados)
+
     coluna = pericia.value
 
-    # Segurança adicional:
-    # somente perícias previamente definidas podem ser alteradas.
     if coluna not in PERICIAS:
-
         await interaction.response.send_message(
             "❌ Perícia inválida.",
             ephemeral=True
         )
-
         return
-
-    ficha = transformar_ficha(dados)
 
     cursor.execute(
         f"""
@@ -1071,7 +1866,7 @@ async def pericia(
         """,
         (
             valor,
-            ficha["id"]
+            f["id"]
         )
     )
 
@@ -1544,9 +2339,7 @@ async def addxp(
         (f["id"],)
     )
 
-    resultado = cursor.fetchone()
-
-    xp_atual = resultado["xp"]
+    xp_atual = cursor.fetchone()[0]
 
     await interaction.response.send_message(
         f"✨ **{f['nome']}** recebeu **{valor} XP**!\n"
@@ -1555,37 +2348,15 @@ async def addxp(
 
 
 # ============================================================
-# CRIAR NPC
+# NOVO /CRIARNPC
 # ============================================================
 
 @bot.tree.command(
     name="criarnpc",
-    description="Cria um NPC."
-)
-@app_commands.describe(
-    aleatorio="NPC aleatório ou personalizado",
-    nome="Nome do NPC",
-    hp="HP do NPC",
-    mana="Mana do NPC"
-)
-@app_commands.choices(
-    aleatorio=[
-        app_commands.Choice(
-            name="Sim",
-            value="sim"
-        ),
-        app_commands.Choice(
-            name="Não",
-            value="nao"
-        )
-    ]
+    description="Inicia a criação guiada de um NPC."
 )
 async def criarnpc(
-    interaction: discord.Interaction,
-    aleatorio: app_commands.Choice[str],
-    nome: str = None,
-    hp: int = None,
-    mana: int = None
+    interaction: discord.Interaction
 ):
 
     garantir_mesa(
@@ -1598,183 +2369,23 @@ async def criarnpc(
     ):
 
         await interaction.response.send_message(
-            "❌ Somente o Mestre pode criar NPCs.",
+            "❌ Somente o Mestre ou um administrador pode criar NPCs.",
             ephemeral=True
         )
 
         return
 
-    if aleatorio.value == "sim":
-
-        nomes = [
-            "Goblin",
-            "Orc",
-            "Esqueleto",
-            "Bandido",
-            "Lobo",
-            "Zumbi",
-            "Slime",
-            "Aranha Gigante",
-            "Cultista",
-            "Guardião",
-            "Golem",
-            "Morcego Gigante",
-            "Troll",
-            "Ladrão",
-            "Cavaleiro Sombrio"
-        ]
-
-        nome = random.choice(nomes)
-
-        hp = random.randint(20, 150)
-        mana = random.randint(0, 100)
-
-        atributos = {}
-
-        for chave in ATRIBUTOS:
-            atributos[chave] = random.randint(0, 5)
-
-        pericias = {}
-
-        for chave in PERICIAS:
-            pericias[chave] = random.randint(0, 5)
-
-        aleatorio_valor = 1
-
-    else:
-
-        if not nome:
-
-            await interaction.response.send_message(
-                "❌ Informe o nome do NPC.",
-                ephemeral=True
-            )
-
-            return
-
-        if hp is None:
-
-            await interaction.response.send_message(
-                "❌ Informe o HP do NPC.",
-                ephemeral=True
-            )
-
-            return
-
-        if mana is None:
-
-            await interaction.response.send_message(
-                "❌ Informe a Mana do NPC.",
-                ephemeral=True
-            )
-
-            return
-
-        if hp <= 0 or mana < 0:
-
-            await interaction.response.send_message(
-                "❌ Valores inválidos.",
-                ephemeral=True
-            )
-
-            return
-
-        atributos = {
-            chave: 0
-            for chave in ATRIBUTOS
-        }
-
-        pericias = {
-            chave: 0
-            for chave in PERICIAS
-        }
-
-        aleatorio_valor = 0
-
-    nome = nome[:50]
-
-    mestre_id = obter_mestre(
-        interaction.channel.id
-    )
-
-    if mestre_id is None:
-
-        mestre_id = interaction.user.id
-
-        cursor.execute("""
-            UPDATE mesas
-            SET mestre_id = ?
-            WHERE channel_id = ?
-        """, (
-            mestre_id,
-            interaction.channel.id
-        ))
-
-    colunas = (
-        list(ATRIBUTOS.keys())
-        + ORDEM_PERICIAS
-    )
-
-    valores = (
-        [atributos[chave] for chave in ATRIBUTOS]
-        + [pericias[chave] for chave in ORDEM_PERICIAS]
-    )
-
-    placeholders = ", ".join(
-        ["?"] * len(valores)
-    )
-
-    cursor.execute(
-        f"""
-        INSERT INTO fichas (
-            channel_id,
-            dono_id,
-            mestre_id,
-            tipo,
-            nome,
-            hp_atual,
-            hp_max,
-            mana_atual,
-            mana_max,
-            xp,
-            {", ".join(colunas)},
-            aleatorio
-        )
-        VALUES (
-            ?, NULL, ?, 'npc', ?,
-            ?, ?, ?, ?, 0,
-            {placeholders},
-            ?
-        )
-        """,
-        [
-            interaction.channel.id,
-            mestre_id,
-            nome,
-            hp,
-            hp,
-            mana,
-            mana
-        ] + valores + [
-            aleatorio_valor
-        ]
-    )
-
-    db.commit()
-
-    rc = (
-        pericias["esquiva"]
-        + atributos["destreza"]
-        + 5
+    criacao = CriacaoNPC(
+        interaction
     )
 
     await interaction.response.send_message(
-        f"👹 NPC **{nome}** criado!\n\n"
-        f"❤️ HP: **{hp}/{hp}**\n"
-        f"🔵 Mana: **{mana}/{mana}**\n"
-        f"⚡ RC: **{rc}**\n\n"
-        f"🎲 Atributos e perícias "
-        f"{'foram gerados aleatoriamente' if aleatorio_valor else 'começaram em 0'}."
+        content=(
+            "👹 **CRIAÇÃO DE NPC — ETAPA 1/3**\n\n"
+            "Como deseja definir **Nome, HP e Mana** do NPC?"
+        ),
+        view=NPCBasicoView(criacao),
+        ephemeral=True
     )
 
 
@@ -1890,7 +2501,7 @@ async def apagarnpc(
 
     cursor.execute(
         "DELETE FROM fichas WHERE id = ?",
-        (resultado["id"],)
+        (resultado[0],)
     )
 
     db.commit()
@@ -1938,9 +2549,9 @@ async def help(
     )
 
     embed.add_field(
-        name="👑 Mestre",
+        name="👹 Mestre",
         value=(
-            "`/criarnpc` — Criar NPC\n"
+            "`/criarnpc` — Criar NPC guiado\n"
             "`/npcs` — Ver NPCs\n"
             "`/apagarnpc` — Apagar NPC\n"
             "`/passarmestre` — Passar Mestre\n"
@@ -1973,4 +2584,4 @@ async def help(
 # INICIAR BOT
 # ============================================================
 
-bot.run(TOKEN) 
+bot.run(TOKEN)
