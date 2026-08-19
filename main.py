@@ -230,23 +230,17 @@ def estado_recurso(atual, maximo):
 
 
 def mostrar_hp(atual, maximo):
-
     return (
-        f"{criar_barra(atual, maximo)}\n"
         f"**{atual}/{maximo}** — "
         f"{estado_recurso(atual, maximo)}"
     )
 
 
 def mostrar_mana(atual, maximo):
-
     return (
-        f"{criar_barra(atual, maximo)}\n"
         f"**{atual}/{maximo}** — "
         f"{estado_recurso(atual, maximo)}"
     )
-
-
 # ============================================================
 # PERMISSÕES DE ALTERAÇÃO
 # ============================================================
