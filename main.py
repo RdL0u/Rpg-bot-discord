@@ -22,6 +22,12 @@ if not TOKEN:
 # ============================================================
 
 db = sqlite3.connect("rpg_fichas.db")
+
+# IMPORTANTE:
+# Faz o SQLite retornar as linhas identificadas pelo nome
+# das colunas, evitando troca de atributos/perícias.
+db.row_factory = sqlite3.Row
+
 cursor = db.cursor()
 
 
@@ -95,15 +101,21 @@ db.commit()
 def adicionar_coluna_se_nao_existir(nome_coluna):
 
     cursor.execute("PRAGMA table_info(fichas)")
-    colunas = [coluna[1] for coluna in cursor.fetchall()]
+
+    colunas = [
+        coluna[1]
+        for coluna in cursor.fetchall()
+    ]
 
     if nome_coluna not in colunas:
+
         cursor.execute(
             f"""
             ALTER TABLE fichas
             ADD COLUMN {nome_coluna} INTEGER NOT NULL DEFAULT 0
             """
         )
+
         db.commit()
 
 
@@ -138,6 +150,7 @@ COLUNAS_NOVAS = [
     "esquiva",
     "furtividade"
 ]
+
 
 for coluna in COLUNAS_NOVAS:
     adicionar_coluna_se_nao_existir(coluna)
@@ -230,7 +243,7 @@ def obter_mestre(channel_id):
     resultado = cursor.fetchone()
 
     if resultado:
-        return resultado[0]
+        return resultado["mestre_id"]
 
     return None
 
@@ -279,64 +292,25 @@ def buscar_ficha(ficha_id):
     return cursor.fetchone()
 
 
+# ============================================================
+# CORREÇÃO PRINCIPAL
+# ============================================================
+
 def transformar_ficha(dados):
 
     if dados is None:
         return None
 
-    colunas = [
-        "id",
-        "channel_id",
-        "dono_id",
-        "mestre_id",
-        "tipo",
-        "nome",
-        "hp_atual",
-        "hp_max",
-        "mana_atual",
-        "mana_max",
-        "xp",
-
-        "forca",
-        "destreza",
-        "vigor",
-        "inteligencia",
-        "carisma",
-        "raciocinio",
-
-        "academicos",
-        "idiomas",
-        "oficios",
-        "armas_brancas",
-        "intimidacao",
-        "ocultismo",
-        "briga",
-        "investigacao",
-        "persuasao",
-        "ciencias",
-        "labia",
-        "prontidao",
-        "conhecimentos_gerais",
-        "lideranca",
-        "sobrevivencia",
-        "conducao",
-        "manha",
-        "tecnologia",
-        "esportes",
-        "medicina",
-        "mira",
-        "esquiva",
-        "furtividade",
-
-        "aleatorio"
-    ]
+    # Como o banco utiliza sqlite3.Row, cada valor é obtido
+    # pelo NOME da coluna e não pela posição.
+    #
+    # Isso impede que uma alteração em uma perícia seja
+    # interpretada como alteração em outra perícia ou atributo.
 
     ficha = {}
 
-    for indice, coluna in enumerate(colunas):
-
-        if indice < len(dados):
-            ficha[coluna] = dados[indice]
+    for coluna in dados.keys():
+        ficha[coluna] = dados[coluna]
 
     return ficha
 
@@ -400,9 +374,9 @@ def criar_pagina_status(f, jogador=None):
     # --------------------------------------------------------
 
     status = (
-        f"❤️ HP: **{f['hp_atual']}/{f['hp_max']}**    "
+        f"❤️ HP: **{f['hp_atual']}/{f['hp_max']}**  "
         f"🔵 Mana: **{f['mana_atual']}/{f['mana_max']}**\n"
-        f"✨ XP: **{f['xp']}**    "
+        f"✨ XP: **{f['xp']}**  "
         f"⚡ RC: **{calcular_rc(f)}**"
     )
 
@@ -411,11 +385,11 @@ def criar_pagina_status(f, jogador=None):
     # --------------------------------------------------------
 
     atributos = (
-        f"💪 For: **{f['forca']}**    "
+        f"💪 For: **{f['forca']}**  "
         f"🏹 Des: **{f['destreza']}**\n"
-        f"🛡️ Vig: **{f['vigor']}**    "
+        f"🛡️ Vig: **{f['vigor']}**  "
         f"🧠 Int: **{f['inteligencia']}**\n"
-        f"🎭 Car: **{f['carisma']}**    "
+        f"🎭 Car: **{f['carisma']}**  "
         f"💡 Rac: **{f['raciocinio']}**"
     )
 
@@ -440,7 +414,7 @@ def criar_pagina_status(f, jogador=None):
 
 # ============================================================
 # PÁGINA 2
-# PERÍCIAS — UMA COLUNA
+# PERÍCIAS
 # ============================================================
 
 def criar_pagina_pericias(f):
@@ -971,24 +945,37 @@ async def atributo(
 
         return
 
-    f = transformar_ficha(dados)
+    coluna = atributo.value
+
+    # Segurança adicional:
+    # somente colunas previamente definidas podem ser alteradas.
+    if coluna not in ATRIBUTOS:
+
+        await interaction.response.send_message(
+            "❌ Atributo inválido.",
+            ephemeral=True
+        )
+
+        return
+
+    ficha = transformar_ficha(dados)
 
     cursor.execute(
         f"""
         UPDATE fichas
-        SET {atributo.value} = ?
+        SET {coluna} = ?
         WHERE id = ?
         """,
         (
             valor,
-            f["id"]
+            ficha["id"]
         )
     )
 
     db.commit()
 
     await interaction.response.send_message(
-        f"⚔️ **{ATRIBUTOS[atributo.value][1]}** "
+        f"⚔️ **{ATRIBUTOS[coluna][1]}** "
         f"alterado para **{valor}**!"
     )
 
@@ -1061,24 +1048,37 @@ async def pericia(
 
         return
 
-    f = transformar_ficha(dados)
+    coluna = pericia.value
+
+    # Segurança adicional:
+    # somente perícias previamente definidas podem ser alteradas.
+    if coluna not in PERICIAS:
+
+        await interaction.response.send_message(
+            "❌ Perícia inválida.",
+            ephemeral=True
+        )
+
+        return
+
+    ficha = transformar_ficha(dados)
 
     cursor.execute(
         f"""
         UPDATE fichas
-        SET {pericia.value} = ?
+        SET {coluna} = ?
         WHERE id = ?
         """,
         (
             valor,
-            f["id"]
+            ficha["id"]
         )
     )
 
     db.commit()
 
     await interaction.response.send_message(
-        f"📚 **{PERICIAS[pericia.value][1]}** "
+        f"📚 **{PERICIAS[coluna][1]}** "
         f"alterada para **{valor}**!"
     )
 
@@ -1544,7 +1544,9 @@ async def addxp(
         (f["id"],)
     )
 
-    xp_atual = cursor.fetchone()[0]
+    resultado = cursor.fetchone()
+
+    xp_atual = resultado["xp"]
 
     await interaction.response.send_message(
         f"✨ **{f['nome']}** recebeu **{valor} XP**!\n"
@@ -1888,7 +1890,7 @@ async def apagarnpc(
 
     cursor.execute(
         "DELETE FROM fichas WHERE id = ?",
-        (resultado[0],)
+        (resultado["id"],)
     )
 
     db.commit()
