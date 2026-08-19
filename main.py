@@ -1322,7 +1322,640 @@ class NPCConfirmacaoView(discord.ui.View):
             view=None
         )
 
+# ============================================================
+# PAINEL DE ALTERAÇÃO DE FICHA — MESTRE / ADM
+# ============================================================
 
+def pode_usar_painel_alteracao(interaction):
+
+    return (
+        eh_admin(interaction)
+        or eh_mestre(interaction)
+    )
+
+
+class AlterarCampoModal(discord.ui.Modal):
+
+    def __init__(self, ficha, campo, nome_campo, categoria):
+        super().__init__(
+            title=f"Alterar {nome_campo}"[:45]
+        )
+
+        self.ficha = ficha
+        self.campo = campo
+        self.nome_campo = nome_campo
+        self.categoria = categoria
+
+        valor_atual = ficha.get(campo, 0)
+
+        self.valor = discord.ui.TextInput(
+            label=f"Novo valor para {nome_campo}"[:45],
+            placeholder=f"Valor atual: {valor_atual}",
+            required=True,
+            max_length=10
+        )
+
+        self.add_item(self.valor)
+
+    async def on_submit(self, interaction: discord.Interaction):
+
+        try:
+            novo_valor = int(self.valor.value)
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ Informe apenas um número inteiro.",
+                ephemeral=True
+            )
+
+            return
+
+        if novo_valor < 0:
+
+            await interaction.response.send_message(
+                "❌ O valor não pode ser negativo.",
+                ephemeral=True
+            )
+
+            return
+
+        # ----------------------------------------------------
+        # HP
+        # ----------------------------------------------------
+
+        if self.campo == "hp_atual":
+
+            novo_valor = min(
+                novo_valor,
+                self.ficha["hp_max"]
+            )
+
+        # ----------------------------------------------------
+        # HP MÁXIMO
+        # ----------------------------------------------------
+
+        if self.campo == "hp_max":
+
+            if novo_valor <= 0:
+
+                await interaction.response.send_message(
+                    "❌ O HP máximo precisa ser maior que 0.",
+                    ephemeral=True
+                )
+
+                return
+
+            hp_atual = min(
+                self.ficha["hp_atual"],
+                novo_valor
+            )
+
+            cursor.execute("""
+                UPDATE fichas
+                SET hp_max = ?,
+                    hp_atual = ?
+                WHERE id = ?
+            """, (
+                novo_valor,
+                hp_atual,
+                self.ficha["id"]
+            ))
+
+            db.commit()
+
+            await interaction.response.send_message(
+                f"❤️ **HP máximo de {self.ficha['nome']}** "
+                f"alterado para **{novo_valor}**.",
+                ephemeral=True
+            )
+
+            return
+
+        # ----------------------------------------------------
+        # MANA MÁXIMA
+        # ----------------------------------------------------
+
+        if self.campo == "mana_max":
+
+            mana_atual = min(
+                self.ficha["mana_atual"],
+                novo_valor
+            )
+
+            cursor.execute("""
+                UPDATE fichas
+                SET mana_max = ?,
+                    mana_atual = ?
+                WHERE id = ?
+            """, (
+                novo_valor,
+                mana_atual,
+                self.ficha["id"]
+            ))
+
+            db.commit()
+
+            await interaction.response.send_message(
+                f"🔵 **Mana máxima de {self.ficha['nome']}** "
+                f"alterada para **{novo_valor}**.",
+                ephemeral=True
+            )
+
+            return
+
+        # ----------------------------------------------------
+        # HP ATUAL / MANA ATUAL
+        # ----------------------------------------------------
+
+        if self.campo == "hp_atual":
+
+            cursor.execute("""
+                UPDATE fichas
+                SET hp_atual = ?
+                WHERE id = ?
+            """, (
+                novo_valor,
+                self.ficha["id"]
+            ))
+
+        elif self.campo == "mana_atual":
+
+            novo_valor = min(
+                novo_valor,
+                self.ficha["mana_max"]
+            )
+
+            cursor.execute("""
+                UPDATE fichas
+                SET mana_atual = ?
+                WHERE id = ?
+            """, (
+                novo_valor,
+                self.ficha["id"]
+            ))
+
+        # ----------------------------------------------------
+        # DEMAIS CAMPOS
+        # ----------------------------------------------------
+
+        elif self.campo in ATRIBUTOS:
+
+            cursor.execute(
+                f"""
+                UPDATE fichas
+                SET {self.campo} = ?
+                WHERE id = ?
+                """,
+                (
+                    novo_valor,
+                    self.ficha["id"]
+                )
+            )
+
+        elif self.campo in PERICIAS:
+
+            cursor.execute(
+                f"""
+                UPDATE fichas
+                SET {self.campo} = ?
+                WHERE id = ?
+                """,
+                (
+                    novo_valor,
+                    self.ficha["id"]
+                )
+            )
+
+        elif self.campo == "xp":
+
+            cursor.execute("""
+                UPDATE fichas
+                SET xp = ?
+                WHERE id = ?
+            """, (
+                novo_valor,
+                self.ficha["id"]
+            ))
+
+        else:
+
+            await interaction.response.send_message(
+                "❌ Campo inválido.",
+                ephemeral=True
+            )
+
+            return
+
+        db.commit()
+
+        await interaction.response.send_message(
+            f"✅ **{self.nome_campo}** de "
+            f"**{self.ficha['nome']}** foi alterado para "
+            f"**{novo_valor}**.",
+            ephemeral=True
+        )
+
+
+class AlterarCampoSelect(discord.ui.Select):
+
+    def __init__(self, ficha, categoria):
+
+        self.ficha = ficha
+        self.categoria = categoria
+
+        opcoes = []
+
+        if categoria == "status":
+
+            opcoes = [
+                discord.SelectOption(
+                    label="HP Atual",
+                    value="hp_atual",
+                    emoji="❤️"
+                ),
+                discord.SelectOption(
+                    label="HP Máximo",
+                    value="hp_max",
+                    emoji="❤️"
+                ),
+                discord.SelectOption(
+                    label="Mana Atual",
+                    value="mana_atual",
+                    emoji="🔵"
+                ),
+                discord.SelectOption(
+                    label="Mana Máxima",
+                    value="mana_max",
+                    emoji="🔵"
+                ),
+                discord.SelectOption(
+                    label="XP",
+                    value="xp",
+                    emoji="✨"
+                )
+            ]
+
+        elif categoria == "atributos":
+
+            for chave, (emoji, nome) in ATRIBUTOS.items():
+
+                opcoes.append(
+                    discord.SelectOption(
+                        label=nome,
+                        value=chave,
+                        emoji=emoji,
+                        description=f"Atual: {ficha[chave]}"
+                    )
+                )
+
+        elif categoria == "pericias":
+
+            for chave, (emoji, nome) in PERICIAS.items():
+
+                opcoes.append(
+                    discord.SelectOption(
+                        label=nome,
+                        value=chave,
+                        emoji=emoji,
+                        description=f"Atual: {ficha[chave]}"
+                    )
+                )
+
+        super().__init__(
+            placeholder="Selecione o que deseja alterar...",
+            options=opcoes,
+            min_values=1,
+            max_values=1
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+
+        campo = self.values[0]
+
+        if campo in ATRIBUTOS:
+
+            nome_campo = ATRIBUTOS[campo][1]
+
+        elif campo in PERICIAS:
+
+            nome_campo = PERICIAS[campo][1]
+
+        else:
+
+            nomes = {
+                "hp_atual": "HP Atual",
+                "hp_max": "HP Máximo",
+                "mana_atual": "Mana Atual",
+                "mana_max": "Mana Máxima",
+                "xp": "XP"
+            }
+
+            nome_campo = nomes[campo]
+
+        await interaction.response.send_modal(
+            AlterarCampoModal(
+                self.ficha,
+                campo,
+                nome_campo,
+                self.categoria
+            )
+        )
+
+
+class CategoriaAlteracaoView(discord.ui.View):
+
+    def __init__(self, ficha):
+
+        super().__init__(timeout=120)
+
+        self.ficha = ficha
+
+    @discord.ui.button(
+        label="❤️ Status",
+        style=discord.ButtonStyle.primary
+    )
+    async def status(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        view = discord.ui.View(timeout=120)
+
+        view.add_item(
+            AlterarCampoSelect(
+                self.ficha,
+                "status"
+            )
+        )
+
+        await interaction.response.edit_message(
+            content=(
+                f"⚙️ **ALTERANDO FICHA: "
+                f"{self.ficha['nome']}**\n\n"
+                f"❤️ Selecione o campo de Status:"
+            ),
+            view=view
+        )
+
+    @discord.ui.button(
+        label="⚔️ Atributos",
+        style=discord.ButtonStyle.primary
+    )
+    async def atributos(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        view = discord.ui.View(timeout=120)
+
+        view.add_item(
+            AlterarCampoSelect(
+                self.ficha,
+                "atributos"
+            )
+        )
+
+        await interaction.response.edit_message(
+            content=(
+                f"⚙️ **ALTERANDO FICHA: "
+                f"{self.ficha['nome']}**\n\n"
+                f"⚔️ Selecione o atributo:"
+            ),
+            view=view
+        )
+
+    @discord.ui.button(
+        label="📚 Perícias",
+        style=discord.ButtonStyle.primary
+    )
+    async def pericias(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        view = discord.ui.View(timeout=120)
+
+        view.add_item(
+            AlterarCampoSelect(
+                self.ficha,
+                "pericias"
+            )
+        )
+
+        await interaction.response.edit_message(
+            content=(
+                f"⚙️ **ALTERANDO FICHA: "
+                f"{self.ficha['nome']}**\n\n"
+                f"📚 Selecione a perícia:"
+            ),
+            view=view
+        )
+
+
+class EscolherNPCSelect(discord.ui.Select):
+
+    def __init__(self, fichas):
+
+        self.fichas = fichas
+
+        opcoes = []
+
+        for ficha in fichas[:25]:
+
+            opcoes.append(
+                discord.SelectOption(
+                    label=ficha["nome"][:100],
+                    value=str(ficha["id"]),
+                    emoji="👹"
+                )
+            )
+
+        super().__init__(
+            placeholder="Selecione o NPC...",
+            options=opcoes
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+
+        ficha_id = int(self.values[0])
+
+        dados = buscar_ficha(ficha_id)
+
+        if dados is None:
+
+            await interaction.response.send_message(
+                "❌ Essa ficha não existe mais.",
+                ephemeral=True
+            )
+
+            return
+
+        ficha = transformar_ficha(dados)
+
+        await interaction.response.edit_message(
+            content=(
+                f"⚙️ **ALTERAR FICHA**\n\n"
+                f"👹 NPC: **{ficha['nome']}**\n\n"
+                f"Escolha o que deseja alterar:"
+            ),
+            view=CategoriaAlteracaoView(ficha)
+        )
+
+
+class EscolherJogadorView(discord.ui.View):
+
+    def __init__(self):
+
+        super().__init__(timeout=120)
+
+        self.add_item(
+            discord.ui.UserSelect(
+                placeholder="Selecione o jogador...",
+                min_values=1,
+                max_values=1
+            )
+        )
+
+        self.children[0].callback = self.selecionar
+
+    async def selecionar(self, interaction: discord.Interaction):
+
+        jogador = self.children[0].values[0]
+
+        dados = buscar_ficha_jogador(
+            interaction.channel.id,
+            jogador.id
+        )
+
+        if dados is None:
+
+            await interaction.response.send_message(
+                "❌ Esse jogador não possui uma ficha.",
+                ephemeral=True
+            )
+
+            return
+
+        ficha = transformar_ficha(dados)
+
+        await interaction.response.edit_message(
+            content=(
+                f"⚙️ **ALTERAR FICHA**\n\n"
+                f"👤 Jogador: **{ficha['nome']}**\n\n"
+                f"Escolha o que deseja alterar:"
+            ),
+            view=CategoriaAlteracaoView(ficha)
+        )
+
+
+class TipoFichaAlteracaoView(discord.ui.View):
+
+    def __init__(self, interaction):
+
+        super().__init__(timeout=120)
+
+        self.channel_id = interaction.channel.id
+
+    @discord.ui.button(
+        label="👤 Jogador",
+        style=discord.ButtonStyle.primary
+    )
+    async def jogador(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.edit_message(
+            content=(
+                "⚙️ **ALTERAR FICHA**\n\n"
+                "👤 Selecione o jogador:"
+            ),
+            view=EscolherJogadorView()
+        )
+
+    @discord.ui.button(
+        label="👹 NPC",
+        style=discord.ButtonStyle.danger
+    )
+    async def npc(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        cursor.execute("""
+            SELECT *
+            FROM fichas
+            WHERE channel_id = ?
+            AND tipo = 'npc'
+            ORDER BY nome
+        """, (
+            self.channel_id,
+        ))
+
+        resultados = cursor.fetchall()
+
+        if not resultados:
+
+            await interaction.response.edit_message(
+                content="❌ Não existem NPCs nesta mesa.",
+                view=None
+            )
+
+            return
+
+        fichas = [
+            transformar_ficha(dados)
+            for dados in resultados
+        ]
+
+        view = discord.ui.View(timeout=120)
+
+        view.add_item(
+            EscolherNPCSelect(fichas)
+        )
+
+        await interaction.response.edit_message(
+            content=(
+                "⚙️ **ALTERAR FICHA**\n\n"
+                "👹 Selecione o NPC:"
+            ),
+            view=view
+        )
+
+
+# ============================================================
+# COMANDO /ALTERAR
+# ============================================================
+
+@bot.tree.command(
+    name="alterar",
+    description="Abre o painel para alterar uma ficha."
+)
+async def alterar(
+    interaction: discord.Interaction
+):
+
+    if not pode_usar_painel_alteracao(interaction):
+
+        await interaction.response.send_message(
+            "❌ Somente o Mestre ou um administrador "
+            "pode utilizar este painel.",
+            ephemeral=True
+        )
+
+        return
+
+    await interaction.response.send_message(
+        "⚙️ **PAINEL DE ALTERAÇÃO DE FICHA**\n\n"
+        "Escolha o tipo de ficha que deseja alterar:",
+        view=TipoFichaAlteracaoView(interaction),
+        ephemeral=True
+    )
 # ============================================================
 # BOT ONLINE
 # ============================================================
