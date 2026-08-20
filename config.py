@@ -1,7 +1,16 @@
+import os
+
+
 # ============================================================
-# CONFIGURAÇÕES DO RPG
+# CONFIGURAÇÃO
 # ============================================================
 
+TOKEN = os.getenv("DISCORD_TOKEN")
+
+if not TOKEN:
+    raise RuntimeError(
+        "DISCORD_TOKEN não foi configurado."
+    )
 
 # ============================================================
 # ATRIBUTOS
