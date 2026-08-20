@@ -178,13 +178,8 @@ def criar_pagina_status(f, jogador=None):
     # --------------------------------------------------------
 
     if jogador:
-
-        identificacao = (
-            f"Jogador: {jogador.mention}"
-        )
-
+        identificacao = f"Jogador: {jogador.mention}"
     else:
-
         identificacao = "👹 NPC"
 
     # --------------------------------------------------------
@@ -192,9 +187,9 @@ def criar_pagina_status(f, jogador=None):
     # --------------------------------------------------------
 
     status = (
-        f"❤️ HP: **{f['hp_atual']}/{f['hp_max']}**\n"
+        f"❤️ HP: **{f['hp_atual']}/{f['hp_max']}**   "
         f"🔵 Mana: **{f['mana_atual']}/{f['mana_max']}**\n"
-        f"✨ XP: **{f['xp']}**\n"
+        f"✨ XP: **{f['xp']}**   "
         f"⚡ RC: **{calcular_rc(f)}**"
     )
 
@@ -203,11 +198,11 @@ def criar_pagina_status(f, jogador=None):
     # --------------------------------------------------------
 
     atributos = (
-        f"💪 For: **{f['forca']}**    "
-        f"🏹 Des: **{f['destreza']}**\n"
-        f"🛡️ Vig: **{f['vigor']}**    "
-        f"🧠 Int: **{f['inteligencia']}**\n"
-        f"🎭 Car: **{f['carisma']}**    "
+        f"💪 For: **{f['forca']}**   "
+        f"🏹 Des: **{f['destreza']}**   "
+        f"🛡️ Vig: **{f['vigor']}**\n"
+        f"🧠 Int: **{f['inteligencia']}**   "
+        f"🎭 Car: **{f['carisma']}**   "
         f"💡 Rac: **{f['raciocinio']}**"
     )
 
@@ -216,9 +211,9 @@ def criar_pagina_status(f, jogador=None):
     # --------------------------------------------------------
 
     embed.description = (
-        f"{identificacao}\n\n"
+        f"{identificacao}\n"
         f"❤️ **STATUS**\n"
-        f"{status}\n\n"
+        f"{status}\n"
         f"⚔️ **ATRIBUTOS**\n"
         f"{atributos}"
     )
@@ -228,8 +223,6 @@ def criar_pagina_status(f, jogador=None):
     )
 
     return embed
-
-
 # ============================================================
 # PÁGINA 2
 # PERÍCIAS — UMA COLUNA
