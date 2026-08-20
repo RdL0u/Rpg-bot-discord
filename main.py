@@ -1,27 +1,40 @@
 import os
-import sqlite3
 import random
 import discord
 
 from discord.ext import commands
 from discord import app_commands
 
-from database import db, cursor
-from permissoes import (
+from database import (
+    garantir_mesa,
     obter_mestre,
+    definir_mestre,
+    transferir_npcs,
+    buscar_ficha_jogador,
+    buscar_ficha,
+    buscar_npcs,
+    buscar_npc_por_nome,
+    criar_ficha_jogador,
+    criar_npc,
+    alterar_hp,
+    alterar_hp_e_maximo,
+    alterar_mana,
+    alterar_mana_e_maximo,
+    adicionar_xp,
+    alterar_atributo,
+    alterar_pericia,
+    apagar_ficha,
+    apagar_npc_por_nome
+)
+
+from permissoes import (
     eh_admin,
     eh_mestre,
     pode_alterar_ficha
 )
 
 from fichas import (
-    buscar_ficha_jogador,
-    buscar_ficha,
-    transformar_ficha,
-    atualizar_hp,
-    atualizar_mana,
-    adicionar_xp,
-    deletar_ficha
+    transformar_ficha
 )
 
 
@@ -307,36 +320,19 @@ async def definirmestre(
 
         return
 
-    cursor.execute("""
-        INSERT OR IGNORE INTO mesas (
-            channel_id,
-            mestre_id
-        )
-        VALUES (?, NULL)
-    """, (
+    garantir_mesa(
+        interaction.channel.id
+    )
+
+    definir_mestre(
         interaction.channel.id,
-    ))
+        jogador.id
+    )
 
-    cursor.execute("""
-        UPDATE mesas
-        SET mestre_id = ?
-        WHERE channel_id = ?
-    """, (
-        jogador.id,
-        interaction.channel.id
-    ))
-
-    cursor.execute("""
-        UPDATE fichas
-        SET mestre_id = ?
-        WHERE channel_id = ?
-        AND tipo = 'npc'
-    """, (
-        jogador.id,
-        interaction.channel.id
-    ))
-
-    db.commit()
+    transferir_npcs(
+        interaction.channel.id,
+        jogador.id
+    )
 
     await interaction.response.send_message(
         f"👑 **{jogador.display_name}** agora é o Mestre deste canal!"
@@ -375,26 +371,19 @@ async def passarmestre(
 
         return
 
-    cursor.execute("""
-        UPDATE mesas
-        SET mestre_id = ?
-        WHERE channel_id = ?
-    """, (
-        jogador.id,
+    garantir_mesa(
         interaction.channel.id
-    ))
+    )
 
-    cursor.execute("""
-        UPDATE fichas
-        SET mestre_id = ?
-        WHERE channel_id = ?
-        AND tipo = 'npc'
-    """, (
-        jogador.id,
-        interaction.channel.id
-    ))
+    definir_mestre(
+        interaction.channel.id,
+        jogador.id
+    )
 
-    db.commit()
+    transferir_npcs(
+        interaction.channel.id,
+        jogador.id
+    )
 
     await interaction.response.send_message(
         f"👑 Novo Mestre: {jogador.mention}\n"
@@ -463,15 +452,9 @@ async def criarficha(
     mana: int
 ):
 
-    cursor.execute("""
-        INSERT OR IGNORE INTO mesas (
-            channel_id,
-            mestre_id
-        )
-        VALUES (?, NULL)
-    """, (
-        interaction.channel.id,
-    ))
+    garantir_mesa(
+        interaction.channel.id
+    )
 
     existente = buscar_ficha_jogador(
         interaction.channel.id,
@@ -507,42 +490,13 @@ async def criarficha(
 
     nome = nome[:50]
 
-    cursor.execute("""
-        INSERT INTO fichas (
-            channel_id,
-            dono_id,
-            mestre_id,
-            tipo,
-            nome,
-            hp_atual,
-            hp_max,
-            mana_atual,
-            mana_max,
-            xp,
-            forca,
-            destreza,
-            vigor,
-            inteligencia,
-            carisma,
-            raciocinio,
-            aleatorio
-        )
-        VALUES (
-            ?, ?, NULL, 'jogador', ?,
-            ?, ?, ?, ?, 0,
-            0, 0, 0, 0, 0, 0, 0
-        )
-    """, (
+    criar_ficha_jogador(
         interaction.channel.id,
         interaction.user.id,
         nome,
         hp,
-        hp,
-        mana,
         mana
-    ))
-
-    db.commit()
+    )
 
     await interaction.response.send_message(
         f"📜 Ficha de **{nome}** criada!\n\n"
@@ -691,19 +645,11 @@ async def atributo(
 
     f = transformar_ficha(dados)
 
-    cursor.execute(
-        f"""
-        UPDATE fichas
-        SET {atributo.value} = ?
-        WHERE id = ?
-        """,
-        (
-            valor,
-            f["id"]
-        )
+    alterar_atributo(
+        f["id"],
+        atributo.value,
+        valor
     )
-
-    db.commit()
 
     await interaction.response.send_message(
         f"⚔️ **{ATRIBUTOS[atributo.value][1]}** "
@@ -781,19 +727,11 @@ async def pericia(
 
     f = transformar_ficha(dados)
 
-    cursor.execute(
-        f"""
-        UPDATE fichas
-        SET {pericia.value} = ?
-        WHERE id = ?
-        """,
-        (
-            valor,
-            f["id"]
-        )
+    alterar_pericia(
+        f["id"],
+        pericia.value,
+        valor
     )
-
-    db.commit()
 
     await interaction.response.send_message(
         f"📚 **{PERICIAS[pericia.value][1]}** "
@@ -858,22 +796,17 @@ async def alterarficha(
 
         return
 
-    cursor.execute("""
-        UPDATE fichas
-        SET hp_atual = ?,
-            hp_max = ?,
-            mana_atual = ?,
-            mana_max = ?
-        WHERE id = ?
-    """, (
+    alterar_hp_e_maximo(
+        f["id"],
         hp,
-        hp,
-        mana,
-        mana,
-        f["id"]
-    ))
+        hp
+    )
 
-    db.commit()
+    alterar_mana_e_maximo(
+        f["id"],
+        mana,
+        mana
+    )
 
     await interaction.response.send_message(
         f"⚙️ Ficha de **{f['nome']}** atualizada!\n\n"
@@ -910,7 +843,7 @@ async def apagarficha(
 
     f = transformar_ficha(dados)
 
-    deletar_ficha(
+    apagar_ficha(
         f["id"]
     )
 
@@ -962,27 +895,12 @@ async def dano(
 
     f = transformar_ficha(dados)
 
-    # --------------------------------------------------------
-    # PROTEÇÃO:
-    # Este comando atua somente sobre fichas de jogadores.
-    # NPCs possuem comandos próprios controlados pelo Mestre.
-    # --------------------------------------------------------
-
-    if f["tipo"] != "jogador":
-
-        await interaction.response.send_message(
-            "❌ Esta ficha não pertence a um jogador.",
-            ephemeral=True
-        )
-
-        return
-
     novo_hp = max(
         0,
         f["hp_atual"] - valor
     )
 
-    atualizar_hp(
+    alterar_hp(
         f["id"],
         novo_hp
     )
@@ -1036,15 +954,6 @@ async def cura(
 
     f = transformar_ficha(dados)
 
-    if f["tipo"] != "jogador":
-
-        await interaction.response.send_message(
-            "❌ Esta ficha não pertence a um jogador.",
-            ephemeral=True
-        )
-
-        return
-
     novo_hp = min(
         f["hp_max"],
         f["hp_atual"] + valor
@@ -1052,7 +961,7 @@ async def cura(
 
     recuperado = novo_hp - f["hp_atual"]
 
-    atualizar_hp(
+    alterar_hp(
         f["id"],
         novo_hp
     )
@@ -1115,7 +1024,7 @@ async def gastarmana(
 
     nova_mana = f["mana_atual"] - valor
 
-    atualizar_mana(
+    alterar_mana(
         f["id"],
         nova_mana
     )
@@ -1169,15 +1078,6 @@ async def recuperarmana(
 
     f = transformar_ficha(dados)
 
-    if f["tipo"] != "jogador":
-
-        await interaction.response.send_message(
-            "❌ Esta ficha não pertence a um jogador.",
-            ephemeral=True
-        )
-
-        return
-
     nova_mana = min(
         f["mana_max"],
         f["mana_atual"] + valor
@@ -1185,7 +1085,7 @@ async def recuperarmana(
 
     recuperado = nova_mana - f["mana_atual"]
 
-    atualizar_mana(
+    alterar_mana(
         f["id"],
         nova_mana
     )
@@ -1252,22 +1152,14 @@ async def addxp(
 
         return
 
-    adicionar_xp(
+    novo_xp = adicionar_xp(
         f["id"],
         valor
     )
 
-    dados_atualizados = buscar_ficha(
-        f["id"]
-    )
-
-    ficha_atualizada = transformar_ficha(
-        dados_atualizados
-    )
-
     await interaction.response.send_message(
         f"✨ **{f['nome']}** recebeu **{valor} XP**!\n"
-        f"✨ XP atual: **{ficha_atualizada['xp']}**"
+        f"✨ XP atual: **{novo_xp}**"
     )
 
 
@@ -1305,15 +1197,9 @@ async def criarnpc(
     mana: int = None
 ):
 
-    cursor.execute("""
-        INSERT OR IGNORE INTO mesas (
-            channel_id,
-            mestre_id
-        )
-        VALUES (?, NULL)
-    """, (
-        interaction.channel.id,
-    ))
+    garantir_mesa(
+        interaction.channel.id
+    )
 
     if (
         not eh_mestre(interaction)
@@ -1424,66 +1310,21 @@ async def criarnpc(
 
         mestre_id = interaction.user.id
 
-        cursor.execute("""
-            UPDATE mesas
-            SET mestre_id = ?
-            WHERE channel_id = ?
-        """, (
-            mestre_id,
-            interaction.channel.id
-        ))
-
-    colunas = (
-        list(ATRIBUTOS.keys())
-        + ORDEM_PERICIAS
-    )
-
-    valores = (
-        [atributos[chave] for chave in ATRIBUTOS]
-        + [pericias[chave] for chave in ORDEM_PERICIAS]
-    )
-
-    placeholders = ", ".join(
-        ["?"] * len(valores)
-    )
-
-    cursor.execute(
-        f"""
-        INSERT INTO fichas (
-            channel_id,
-            dono_id,
-            mestre_id,
-            tipo,
-            nome,
-            hp_atual,
-            hp_max,
-            mana_atual,
-            mana_max,
-            xp,
-            {", ".join(colunas)},
-            aleatorio
-        )
-        VALUES (
-            ?, NULL, ?, 'npc', ?,
-            ?, ?, ?, ?, 0,
-            {placeholders},
-            ?
-        )
-        """,
-        [
+        definir_mestre(
             interaction.channel.id,
-            mestre_id,
-            nome,
-            hp,
-            hp,
-            mana,
-            mana
-        ] + valores + [
-            aleatorio_valor
-        ]
-    )
+            mestre_id
+        )
 
-    db.commit()
+    criar_npc(
+        interaction.channel.id,
+        mestre_id,
+        nome,
+        hp,
+        mana,
+        atributos,
+        pericias,
+        aleatorio_valor
+    )
 
     rc = (
         pericias["esquiva"]
@@ -1525,17 +1366,9 @@ async def npcs(
 
         return
 
-    cursor.execute("""
-        SELECT *
-        FROM fichas
-        WHERE channel_id = ?
-        AND tipo = 'npc'
-        ORDER BY nome
-    """, (
-        interaction.channel.id,
-    ))
-
-    resultados = cursor.fetchall()
+    resultados = buscar_npcs(
+        interaction.channel.id
+    )
 
     if not resultados:
 
@@ -1588,19 +1421,10 @@ async def apagarnpc(
 
         return
 
-    cursor.execute("""
-        SELECT id
-        FROM fichas
-        WHERE channel_id = ?
-        AND tipo = 'npc'
-        AND nome = ?
-        LIMIT 1
-    """, (
+    resultado = buscar_npc_por_nome(
         interaction.channel.id,
         nome
-    ))
-
-    resultado = cursor.fetchone()
+    )
 
     if resultado is None:
 
@@ -1611,9 +1435,19 @@ async def apagarnpc(
 
         return
 
-    deletar_ficha(
-        resultado[0]
+    apagados = apagar_npc_por_nome(
+        interaction.channel.id,
+        nome
     )
+
+    if apagados == 0:
+
+        await interaction.response.send_message(
+            "❌ Não foi possível apagar o NPC.",
+            ephemeral=True
+        )
+
+        return
 
     await interaction.response.send_message(
         f"🗑️ NPC **{nome}** apagado."
@@ -1675,22 +1509,3 @@ async def help(
             "`/definirmestre` — Definir Mestre\n"
             "Permissões administrativas também "
             "permitem alterar fichas."
-        ),
-        inline=False
-    )
-
-    embed.set_footer(
-        text="BotRPG • Sistema de fichas"
-    )
-
-    await interaction.response.send_message(
-        embed=embed,
-        ephemeral=True
-    )
-
-
-# ============================================================
-# INICIAR BOT
-# ============================================================
-
-bot.run(TOKEN)
