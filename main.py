@@ -16,7 +16,7 @@ from database import (
     cursor
 )
 
-from ficha import (
+from fichas import (
     transformar_ficha,
     criar_pagina_status,
     FichaView,
