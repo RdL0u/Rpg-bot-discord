@@ -255,45 +255,75 @@ def buscar_npc_por_nome(channel_id, nome):
 # CRIAR FICHA DE JOGADOR
 # ============================================================
 
-def criar_ficha_jogador(
-    channel_id,
-    dono_id,
-    nome,
-    hp,
-    mana
+@bot.tree.command(
+    name="criarficha",
+    description="Cria sua ficha neste canal."
+)
+@app_commands.describe(
+    nome="Nome do personagem",
+    hp="HP inicial e máximo",
+    mana="Mana inicial e máxima"
+)
+async def criarficha(
+    interaction: discord.Interaction,
+    nome: str,
+    hp: int,
+    mana: int
 ):
 
-    cursor.execute("""
-        INSERT INTO fichas (
-            channel_id,
-            dono_id,
-            mestre_id,
-            tipo,
-            nome,
-            hp_atual,
-            hp_max,
-            mana_atual,
-            mana_max,
-            xp
+    garantir_mesa(
+        interaction.channel.id
+    )
+
+    existente = buscar_ficha_jogador(
+        interaction.channel.id,
+        interaction.user.id
+    )
+
+    if existente:
+
+        await interaction.response.send_message(
+            "⚠️ Você já possui uma ficha neste canal.",
+            ephemeral=True
         )
-        VALUES (
-            ?, ?, NULL, 'jogador', ?,
-            ?, ?, ?, ?, 0
+
+        return
+
+    if hp <= 0:
+
+        await interaction.response.send_message(
+            "❌ O HP precisa ser maior que 0.",
+            ephemeral=True
         )
-    """, (
-        channel_id,
-        dono_id,
-        nome,
-        hp,
-        hp,
-        mana,
-        mana
-    ))
 
-    db.commit()
+        return
 
-    return cursor.lastrowid
+    if mana < 0:
 
+        await interaction.response.send_message(
+            "❌ A Mana não pode ser negativa.",
+            ephemeral=True
+        )
+
+        return
+
+    nome = nome[:50]
+
+    criar_ficha_jogador(
+        channel_id=interaction.channel.id,
+        dono_id=interaction.user.id,
+        nome=nome,
+        hp=hp,
+        mana=mana
+    )
+
+    await interaction.response.send_message(
+        f"📜 Ficha de **{nome}** criada!\n\n"
+        f"❤️ HP: **{hp}/{hp}**\n"
+        f"🔵 Mana: **{mana}/{mana}**\n"
+        f"✨ XP: **0**\n"
+        f"⚡ RC: **5**"
+    )
 
 # ============================================================
 # CRIAR NPC
