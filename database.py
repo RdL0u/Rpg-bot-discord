@@ -711,3 +711,59 @@ def fechar_banco():
 
     db.commit()
     db.close()
+
+# ============================================================
+# FUNÇÕES DE ACESSO AO BANCO
+# ============================================================
+
+def garantir_mesa(channel_id):
+    cursor.execute("""
+        INSERT OR IGNORE INTO mesas (
+            channel_id,
+            mestre_id
+        )
+        VALUES (?, NULL)
+    """, (channel_id,))
+
+    db.commit()
+
+
+def obter_mestre(channel_id):
+    cursor.execute("""
+        SELECT mestre_id
+        FROM mesas
+        WHERE channel_id = ?
+    """, (channel_id,))
+
+    resultado = cursor.fetchone()
+
+    if resultado:
+        return resultado[0]
+
+    return None
+
+
+def buscar_ficha_jogador(channel_id, user_id):
+    cursor.execute("""
+        SELECT *
+        FROM fichas
+        WHERE channel_id = ?
+        AND dono_id = ?
+        AND tipo = 'jogador'
+        LIMIT 1
+    """, (
+        channel_id,
+        user_id
+    ))
+
+    return cursor.fetchone()
+
+
+def buscar_ficha(ficha_id):
+    cursor.execute("""
+        SELECT *
+        FROM fichas
+        WHERE id = ?
+    """, (ficha_id,))
+
+    return cursor.fetchone()
