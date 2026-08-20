@@ -1,45 +1,20 @@
-import os
-import sqlite3
-import random
 import discord
 
 from discord.ext import commands
 from discord import app_commands
 
-from database import db, cursor
-
-from permissoes import (
-    obter_mestre,
-    eh_admin,
-    eh_mestre,
-    pode_alterar_ficha
-)
-
 from config import (
+    TOKEN,
     ATRIBUTOS,
     PERICIAS,
     ORDEM_PERICIAS
 )
 
-from fichas import (
-    buscar_ficha_jogador,
-    buscar_ficha,
-    transformar_ficha,
-    atualizar_hp,
-    atualizar_mana,
-    adicionar_xp,
-    deletar_ficha
+from database import (
+    db,
+    cursor,
+    adicionar_coluna_se_nao_existir
 )
-
-
-# ============================================================
-# CONFIGURAÇÃO
-# ============================================================
-
-TOKEN = os.getenv("DISCORD_TOKEN")
-
-if not TOKEN:
-    raise RuntimeError("DISCORD_TOKEN não foi configurado.")
 
 
 # ============================================================
@@ -52,6 +27,145 @@ bot = commands.Bot(
     command_prefix="!",
     intents=intents
 )
+
+
+# ============================================================
+# FUNÇÕES AUXILIARES
+# ============================================================
+
+def garantir_mesa(channel_id):
+
+    cursor.execute("""
+        INSERT OR IGNORE INTO mesas (
+            channel_id,
+            mestre_id
+        )
+        VALUES (?, NULL)
+    """, (channel_id,))
+
+    db.commit()
+
+
+def obter_mestre(channel_id):
+
+    cursor.execute("""
+        SELECT mestre_id
+        FROM mesas
+        WHERE channel_id = ?
+    """, (channel_id,))
+
+    resultado = cursor.fetchone()
+
+    if resultado:
+        return resultado[0]
+
+    return None
+
+
+def eh_admin(interaction):
+
+    if interaction.guild is None:
+        return False
+
+    return interaction.user.guild_permissions.administrator
+
+
+def eh_mestre(interaction):
+
+    return (
+        obter_mestre(interaction.channel.id)
+        == interaction.user.id
+    )
+
+
+def buscar_ficha_jogador(channel_id, user_id):
+
+    cursor.execute("""
+        SELECT *
+        FROM fichas
+        WHERE channel_id = ?
+        AND dono_id = ?
+        AND tipo = 'jogador'
+        LIMIT 1
+    """, (
+        channel_id,
+        user_id
+    ))
+
+    return cursor.fetchone()
+
+
+def buscar_ficha(ficha_id):
+
+    cursor.execute("""
+        SELECT *
+        FROM fichas
+        WHERE id = ?
+    """, (ficha_id,))
+
+    return cursor.fetchone()
+
+
+def transformar_ficha(dados):
+
+    if dados is None:
+        return None
+
+    colunas = [
+        "id",
+        "channel_id",
+        "dono_id",
+        "mestre_id",
+        "tipo",
+        "nome",
+        "hp_atual",
+        "hp_max",
+        "mana_atual",
+        "mana_max",
+        "xp",
+
+        "forca",
+        "destreza",
+        "vigor",
+        "inteligencia",
+        "carisma",
+        "raciocinio",
+
+        "academicos",
+        "idiomas",
+        "oficios",
+        "armas_brancas",
+        "intimidacao",
+        "ocultismo",
+        "briga",
+        "investigacao",
+        "persuasao",
+        "ciencias",
+        "labia",
+        "prontidao",
+        "conhecimentos_gerais",
+        "lideranca",
+        "sobrevivencia",
+        "conducao",
+        "manha",
+        "tecnologia",
+        "esportes",
+        "medicina",
+        "mira",
+        "esquiva",
+        "furtividade",
+
+        "aleatorio"
+    ]
+
+    ficha = {}
+
+    for indice, coluna in enumerate(colunas):
+
+        if indice < len(dados):
+            ficha[coluna] = dados[indice]
+
+    return ficha
 
 
 # ============================================================
@@ -99,31 +213,43 @@ def criar_pagina_status(f, jogador=None):
         color=discord.Color.dark_red()
     )
 
+    # --------------------------------------------------------
+    # IDENTIFICAÇÃO
+    # --------------------------------------------------------
+
     if jogador:
         identificacao = f"Jogador: {jogador.mention}"
     else:
         identificacao = "👹 NPC"
 
+    # --------------------------------------------------------
+    # STATUS
+    # --------------------------------------------------------
+
     status = (
-        f"❤️ HP: **{f['hp_atual']}/{f['hp_max']}**   "
+        f"❤️ HP: **{f['hp_atual']}/{f['hp_max']}**    "
         f"🔵 Mana: **{f['mana_atual']}/{f['mana_max']}**\n"
-        f"✨ XP: **{f['xp']}**   "
+        f"✨ XP: **{f['xp']}**    "
         f"⚡ RC: **{calcular_rc(f)}**"
     )
 
+    # --------------------------------------------------------
+    # ATRIBUTOS
+    # --------------------------------------------------------
+
     atributos = (
-        f"💪 For: **{f['forca']}**   "
-        f"🏹 Des: **{f['destreza']}**   "
-        f"🛡️ Vig: **{f['vigor']}**\n"
-        f"🧠 Int: **{f['inteligencia']}**   "
-        f"🎭 Car: **{f['carisma']}**   "
+        f"💪 For: **{f['forca']}**    "
+        f"🏹 Des: **{f['destreza']}**\n"
+        f"🛡️ Vig: **{f['vigor']}**    "
+        f"🧠 Int: **{f['inteligencia']}**\n"
+        f"🎭 Car: **{f['carisma']}**    "
         f"💡 Rac: **{f['raciocinio']}**"
     )
 
     embed.description = (
-        f"{identificacao}\n"
+        f"{identificacao}\n\n"
         f"❤️ **STATUS**\n"
-        f"{status}\n"
+        f"{status}\n\n"
         f"⚔️ **ATRIBUTOS**\n"
         f"{atributos}"
     )
@@ -219,6 +345,33 @@ class FichaView(discord.ui.View):
 
 
 # ============================================================
+# PERMISSÃO PARA ALTERAR FICHA
+# ============================================================
+
+def pode_alterar_ficha(interaction, ficha):
+
+    if eh_admin(interaction):
+        return True
+
+    if ficha["tipo"] == "jogador":
+
+        return (
+            ficha["dono_id"]
+            == interaction.user.id
+            or eh_mestre(interaction)
+        )
+
+    if ficha["tipo"] == "npc":
+
+        return (
+            ficha["mestre_id"]
+            == interaction.user.id
+        )
+
+    return False
+
+
+# ============================================================
 # BOT ONLINE
 # ============================================================
 
@@ -267,15 +420,9 @@ async def definirmestre(
 
         return
 
-    cursor.execute("""
-        INSERT OR IGNORE INTO mesas (
-            channel_id,
-            mestre_id
-        )
-        VALUES (?, NULL)
-    """, (
-        interaction.channel.id,
-    ))
+    garantir_mesa(
+        interaction.channel.id
+    )
 
     cursor.execute("""
         UPDATE mesas
@@ -334,6 +481,10 @@ async def passarmestre(
         )
 
         return
+
+    garantir_mesa(
+        interaction.channel.id
+    )
 
     cursor.execute("""
         UPDATE mesas
@@ -423,15 +574,9 @@ async def criarficha(
     mana: int
 ):
 
-    cursor.execute("""
-        INSERT OR IGNORE INTO mesas (
-            channel_id,
-            mestre_id
-        )
-        VALUES (?, NULL)
-    """, (
-        interaction.channel.id,
-    ))
+    garantir_mesa(
+        interaction.channel.id
+    )
 
     existente = buscar_ficha_jogador(
         interaction.channel.id,
@@ -818,15 +963,22 @@ async def alterarficha(
 
         return
 
-    atualizar_hp(
-        f["id"],
-        hp
-    )
+    cursor.execute("""
+        UPDATE fichas
+        SET hp_atual = ?,
+            hp_max = ?,
+            mana_atual = ?,
+            mana_max = ?
+        WHERE id = ?
+    """, (
+        hp,
+        hp,
+        mana,
+        mana,
+        f["id"]
+    ))
 
-    atualizar_mana(
-        f["id"],
-        mana
-    )
+    db.commit()
 
     await interaction.response.send_message(
         f"⚙️ Ficha de **{f['nome']}** atualizada!\n\n"
@@ -863,9 +1015,12 @@ async def apagarficha(
 
     f = transformar_ficha(dados)
 
-    deletar_ficha(
-        f["id"]
+    cursor.execute(
+        "DELETE FROM fichas WHERE id = ?",
+        (f["id"],)
     )
+
+    db.commit()
 
     await interaction.response.send_message(
         f"🗑️ A ficha **{f['nome']}** foi apagada."
@@ -920,10 +1075,16 @@ async def dano(
         f["hp_atual"] - valor
     )
 
-    atualizar_hp(
-        f["id"],
-        novo_hp
-    )
+    cursor.execute("""
+        UPDATE fichas
+        SET hp_atual = ?
+        WHERE id = ?
+    """, (
+        novo_hp,
+        f["id"]
+    ))
+
+    db.commit()
 
     await interaction.response.send_message(
         f"💥 **{f['nome']}** recebeu **{valor} de dano**!\n"
@@ -981,10 +1142,16 @@ async def cura(
 
     recuperado = novo_hp - f["hp_atual"]
 
-    atualizar_hp(
-        f["id"],
-        novo_hp
-    )
+    cursor.execute("""
+        UPDATE fichas
+        SET hp_atual = ?
+        WHERE id = ?
+    """, (
+        novo_hp,
+        f["id"]
+    ))
+
+    db.commit()
 
     await interaction.response.send_message(
         f"💚 **{f['nome']}** recuperou **{recuperado} de HP**!\n"
@@ -1044,10 +1211,16 @@ async def gastarmana(
 
     nova_mana = f["mana_atual"] - valor
 
-    atualizar_mana(
-        f["id"],
-        nova_mana
-    )
+    cursor.execute("""
+        UPDATE fichas
+        SET mana_atual = ?
+        WHERE id = ?
+    """, (
+        nova_mana,
+        f["id"]
+    ))
+
+    db.commit()
 
     await interaction.response.send_message(
         f"🔮 **{f['nome']}** gastou **{valor} de Mana**!\n"
@@ -1105,10 +1278,16 @@ async def recuperarmana(
 
     recuperado = nova_mana - f["mana_atual"]
 
-    atualizar_mana(
-        f["id"],
-        nova_mana
-    )
+    cursor.execute("""
+        UPDATE fichas
+        SET mana_atual = ?
+        WHERE id = ?
+    """, (
+        nova_mana,
+        f["id"]
+    ))
+
+    db.commit()
 
     await interaction.response.send_message(
         f"💧 **{f['nome']}** recuperou **{recuperado} de Mana**!\n"
@@ -1172,22 +1351,27 @@ async def addxp(
 
         return
 
-    adicionar_xp(
-        f["id"],
-        valor
-    )
-
-    dados_atualizados = buscar_ficha(
+    cursor.execute("""
+        UPDATE fichas
+        SET xp = xp + ?
+        WHERE id = ?
+    """, (
+        valor,
         f["id"]
+    ))
+
+    db.commit()
+
+    cursor.execute(
+        "SELECT xp FROM fichas WHERE id = ?",
+        (f["id"],)
     )
 
-    ficha_atualizada = transformar_ficha(
-        dados_atualizados
-    )
+    xp_atual = cursor.fetchone()[0]
 
     await interaction.response.send_message(
         f"✨ **{f['nome']}** recebeu **{valor} XP**!\n"
-        f"✨ XP atual: **{ficha_atualizada['xp']}**"
+        f"✨ XP atual: **{xp_atual}**"
     )
 
 
@@ -1225,15 +1409,9 @@ async def criarnpc(
     mana: int = None
 ):
 
-    cursor.execute("""
-        INSERT OR IGNORE INTO mesas (
-            channel_id,
-            mestre_id
-        )
-        VALUES (?, NULL)
-    """, (
-        interaction.channel.id,
-    ))
+    garantir_mesa(
+        interaction.channel.id
+    )
 
     if (
         not eh_mestre(interaction)
@@ -1531,9 +1709,12 @@ async def apagarnpc(
 
         return
 
-    deletar_ficha(
-        resultado[0]
+    cursor.execute(
+        "DELETE FROM fichas WHERE id = ?",
+        (resultado[0],)
     )
+
+    db.commit()
 
     await interaction.response.send_message(
         f"🗑️ NPC **{nome}** apagado."
