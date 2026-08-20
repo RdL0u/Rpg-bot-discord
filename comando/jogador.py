@@ -10,7 +10,7 @@ from database import (
     buscar_ficha_jogador,
 )
 
-from ficha import (
+from fichas import (
     transformar_ficha,
     criar_pagina_status,
     FichaView,
