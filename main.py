@@ -23,7 +23,7 @@ from fichas import (
     pode_alterar_ficha
 )
 
-from comandos.jogador import registrar_comandos_jogador
+from comando.jogador import registrar_comandos_jogador
 
 
 # ============================================================
