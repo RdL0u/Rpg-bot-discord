@@ -10,21 +10,24 @@ from database import (
     obter_mestre,
     definir_mestre,
     transferir_npcs,
+
     buscar_ficha_jogador,
     buscar_ficha,
     buscar_npcs,
     buscar_npc_por_nome,
+
     criar_ficha_jogador,
     criar_npc,
+
     alterar_hp,
     alterar_hp_e_maximo,
     alterar_mana,
-    alterar_mana_e_maximo,
     adicionar_xp,
+
     alterar_atributo,
     alterar_pericia,
-    apagar_ficha,
-    apagar_npc_por_nome
+
+    apagar_ficha
 )
 
 from permissoes import (
@@ -643,16 +646,27 @@ async def atributo(
 
         return
 
-    f = transformar_ficha(dados)
+    coluna = atributo.value
+
+    if coluna not in ATRIBUTOS:
+
+        await interaction.response.send_message(
+            "❌ Atributo inválido.",
+            ephemeral=True
+        )
+
+        return
+
+    ficha = transformar_ficha(dados)
 
     alterar_atributo(
-        f["id"],
-        atributo.value,
+        ficha["id"],
+        coluna,
         valor
     )
 
     await interaction.response.send_message(
-        f"⚔️ **{ATRIBUTOS[atributo.value][1]}** "
+        f"⚔️ **{ATRIBUTOS[coluna][1]}** "
         f"alterado para **{valor}**!"
     )
 
@@ -725,16 +739,27 @@ async def pericia(
 
         return
 
-    f = transformar_ficha(dados)
+    coluna = pericia.value
+
+    if coluna not in PERICIAS:
+
+        await interaction.response.send_message(
+            "❌ Perícia inválida.",
+            ephemeral=True
+        )
+
+        return
+
+    ficha = transformar_ficha(dados)
 
     alterar_pericia(
-        f["id"],
-        pericia.value,
+        ficha["id"],
+        coluna,
         valor
     )
 
     await interaction.response.send_message(
-        f"📚 **{PERICIAS[pericia.value][1]}** "
+        f"📚 **{PERICIAS[coluna][1]}** "
         f"alterada para **{valor}**!"
     )
 
@@ -878,7 +903,7 @@ async def dano(
     if dados is None:
 
         await interaction.response.send_message(
-            "❌ Esse jogador não possui uma ficha neste canal.",
+            "❌ Ficha não encontrada.",
             ephemeral=True
         )
 
@@ -937,7 +962,7 @@ async def cura(
     if dados is None:
 
         await interaction.response.send_message(
-            "❌ Esse jogador não possui uma ficha neste canal.",
+            "❌ Ficha não encontrada.",
             ephemeral=True
         )
 
@@ -1061,7 +1086,7 @@ async def recuperarmana(
     if dados is None:
 
         await interaction.response.send_message(
-            "❌ Esse jogador não possui uma ficha neste canal.",
+            "❌ Ficha não encontrada.",
             ephemeral=True
         )
 
@@ -1152,14 +1177,14 @@ async def addxp(
 
         return
 
-    novo_xp = adicionar_xp(
+    xp_atual = adicionar_xp(
         f["id"],
         valor
     )
 
     await interaction.response.send_message(
         f"✨ **{f['nome']}** recebeu **{valor} XP**!\n"
-        f"✨ XP atual: **{novo_xp}**"
+        f"✨ XP atual: **{xp_atual}**"
     )
 
 
@@ -1310,6 +1335,10 @@ async def criarnpc(
 
         mestre_id = interaction.user.id
 
+        garantir_mesa(
+            interaction.channel.id
+        )
+
         definir_mestre(
             interaction.channel.id,
             mestre_id
@@ -1435,19 +1464,9 @@ async def apagarnpc(
 
         return
 
-    apagados = apagar_npc_por_nome(
-        interaction.channel.id,
-        nome
+    apagar_ficha(
+        resultado[0]
     )
-
-    if apagados == 0:
-
-        await interaction.response.send_message(
-            "❌ Não foi possível apagar o NPC.",
-            ephemeral=True
-        )
-
-        return
 
     await interaction.response.send_message(
         f"🗑️ NPC **{nome}** apagado."
