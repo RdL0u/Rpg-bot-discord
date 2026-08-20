@@ -945,7 +945,7 @@ async def dano(
     if dados is None:
 
         await interaction.response.send_message(
-            "❌ Ficha não encontrada.",
+            "❌ Esse jogador não possui uma ficha neste canal.",
             ephemeral=True
         )
 
@@ -961,6 +961,21 @@ async def dano(
         return
 
     f = transformar_ficha(dados)
+
+    # --------------------------------------------------------
+    # PROTEÇÃO:
+    # Este comando atua somente sobre fichas de jogadores.
+    # NPCs possuem comandos próprios controlados pelo Mestre.
+    # --------------------------------------------------------
+
+    if f["tipo"] != "jogador":
+
+        await interaction.response.send_message(
+            "❌ Esta ficha não pertence a um jogador.",
+            ephemeral=True
+        )
+
+        return
 
     novo_hp = max(
         0,
@@ -1004,7 +1019,7 @@ async def cura(
     if dados is None:
 
         await interaction.response.send_message(
-            "❌ Ficha não encontrada.",
+            "❌ Esse jogador não possui uma ficha neste canal.",
             ephemeral=True
         )
 
@@ -1020,6 +1035,15 @@ async def cura(
         return
 
     f = transformar_ficha(dados)
+
+    if f["tipo"] != "jogador":
+
+        await interaction.response.send_message(
+            "❌ Esta ficha não pertence a um jogador.",
+            ephemeral=True
+        )
+
+        return
 
     novo_hp = min(
         f["hp_max"],
@@ -1128,7 +1152,7 @@ async def recuperarmana(
     if dados is None:
 
         await interaction.response.send_message(
-            "❌ Ficha não encontrada.",
+            "❌ Esse jogador não possui uma ficha neste canal.",
             ephemeral=True
         )
 
@@ -1144,6 +1168,15 @@ async def recuperarmana(
         return
 
     f = transformar_ficha(dados)
+
+    if f["tipo"] != "jogador":
+
+        await interaction.response.send_message(
+            "❌ Esta ficha não pertence a um jogador.",
+            ephemeral=True
+        )
+
+        return
 
     nova_mana = min(
         f["mana_max"],
