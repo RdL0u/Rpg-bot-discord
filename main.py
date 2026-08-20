@@ -1509,3 +1509,22 @@ async def help(
             "`/definirmestre` — Definir Mestre\n"
             "Permissões administrativas também "
             "permitem alterar fichas."
+        ),
+        inline=False
+    )
+
+    embed.set_footer(
+        text="BotRPG • Sistema de fichas"
+    )
+
+    await interaction.response.send_message(
+        embed=embed,
+        ephemeral=True
+    )
+
+
+# ============================================================
+# INICIAR BOT
+# ============================================================
+
+bot.run(TOKEN)
