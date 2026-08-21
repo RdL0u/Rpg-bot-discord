@@ -5,7 +5,9 @@ from discord import app_commands
 
 from database import (
     db,
-    cursor
+    cursor,
+    garantir_mesa,
+    obter_mestre
 )
 
 from fichas import (
@@ -20,63 +22,10 @@ from config import (
     ORDEM_PERICIAS
 )
 
-
-# ============================================================
-# FUNÇÕES AUXILIARES DO MESTRE
-# ============================================================
-
-def garantir_mesa(channel_id):
-
-    cursor.execute("""
-        INSERT OR IGNORE INTO mesas (
-            channel_id,
-            mestre_id
-        )
-        VALUES (?, NULL)
-    """, (
-        channel_id,
-    ))
-
-    db.commit()
-
-
-def obter_mestre(channel_id):
-
-    cursor.execute("""
-        SELECT mestre_id
-        FROM mesas
-        WHERE channel_id = ?
-    """, (
-        channel_id,
-    ))
-
-    resultado = cursor.fetchone()
-
-    if resultado:
-        return resultado[0]
-
-    return None
-
-
-def eh_admin(interaction):
-
-    if interaction.guild is None:
-        return False
-
-    return interaction.user.guild_permissions.administrator
-
-
-def eh_mestre(interaction):
-
-    if interaction.channel is None:
-        return False
-
-    return (
-        obter_mestre(
-            interaction.channel.id
-        )
-        == interaction.user.id
-    )
+from comando.permissoes import (
+    eh_admin,
+    eh_mestre
+)
 
 
 # ============================================================
@@ -296,10 +245,6 @@ def registrar_comandos_mestre(bot):
 
             return
 
-        # ====================================================
-        # NPC ALEATÓRIO
-        # ====================================================
-
         if aleatorio.value == "sim":
 
             nomes = [
@@ -353,10 +298,6 @@ def registrar_comandos_mestre(bot):
                 )
 
             aleatorio_valor = 1
-
-        # ====================================================
-        # NPC PERSONALIZADO
-        # ====================================================
 
         else:
 
