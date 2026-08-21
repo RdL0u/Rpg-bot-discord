@@ -15,14 +15,39 @@ from fichas import (
     criar_pagina_status,
     FichaView,
     pode_alterar_ficha,
+    estado_hp,
+    estado_mana,
 )
 
-from config import ATRIBUTOS, PERICIAS
-
-from comando.permissoes import (
-    eh_admin,
-    eh_mestre
+from config import (
+    ATRIBUTOS,
+    PERICIAS
 )
+
+
+# ============================================================
+# PERMISSÕES
+# ============================================================
+
+def eh_admin(interaction):
+
+    if interaction.guild is None:
+        return False
+
+    return interaction.user.guild_permissions.administrator
+
+
+def eh_mestre(interaction):
+
+    if interaction.channel is None:
+        return False
+
+    return (
+        obter_mestre(
+            interaction.channel.id
+        )
+        == interaction.user.id
+    )
 
 
 # ============================================================
@@ -126,10 +151,20 @@ def registrar_comandos_jogador(bot):
 
         db.commit()
 
+        estado_inicial_hp = estado_hp(
+            hp,
+            hp
+        )
+
+        estado_inicial_mana = estado_mana(
+            mana,
+            mana
+        )
+
         await interaction.response.send_message(
             f"📜 Ficha de **{nome}** criada!\n\n"
-            f"❤️ HP: **{hp}/{hp}**\n"
-            f"🔵 Mana: **{mana}/{mana}**\n"
+            f"❤️ HP: **{hp}/{hp}** • {estado_inicial_hp}\n"
+            f"🔵 Mana: **{mana}/{mana}** • {estado_inicial_mana}\n"
             f"✨ XP: **0**\n"
             f"⚡ RC: **5**"
         )
@@ -160,7 +195,9 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        f = transformar_ficha(dados)
+        f = transformar_ficha(
+            dados
+        )
 
         await interaction.response.send_message(
             embed=criar_pagina_status(
@@ -198,13 +235,16 @@ def registrar_comandos_jogador(bot):
         if dados is None:
 
             await interaction.response.send_message(
-                f"❌ **{jogador.display_name}** não possui uma ficha.",
+                f"❌ **{jogador.display_name}** "
+                f"não possui uma ficha.",
                 ephemeral=True
             )
 
             return
 
-        f = transformar_ficha(dados)
+        f = transformar_ficha(
+            dados
+        )
 
         await interaction.response.send_message(
             embed=criar_pagina_status(
@@ -286,7 +326,9 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        f = transformar_ficha(dados)
+        f = transformar_ficha(
+            dados
+        )
 
         cursor.execute(
             f"""
@@ -321,29 +363,98 @@ def registrar_comandos_jogador(bot):
     )
     @app_commands.choices(
         pericia=[
-            app_commands.Choice(name="Acadêmicos", value="academicos"),
-            app_commands.Choice(name="Idiomas", value="idiomas"),
-            app_commands.Choice(name="Ofícios", value="oficios"),
-            app_commands.Choice(name="Armas Brancas", value="armas_brancas"),
-            app_commands.Choice(name="Intimidação", value="intimidacao"),
-            app_commands.Choice(name="Ocultismo", value="ocultismo"),
-            app_commands.Choice(name="Briga", value="briga"),
-            app_commands.Choice(name="Investigação", value="investigacao"),
-            app_commands.Choice(name="Persuasão", value="persuasao"),
-            app_commands.Choice(name="Ciências", value="ciencias"),
-            app_commands.Choice(name="Lábia", value="labia"),
-            app_commands.Choice(name="Prontidão", value="prontidao"),
-            app_commands.Choice(name="Conhecimentos Gerais", value="conhecimentos_gerais"),
-            app_commands.Choice(name="Liderança", value="lideranca"),
-            app_commands.Choice(name="Sobrevivência", value="sobrevivencia"),
-            app_commands.Choice(name="Condução", value="conducao"),
-            app_commands.Choice(name="Manha", value="manha"),
-            app_commands.Choice(name="Tecnologia", value="tecnologia"),
-            app_commands.Choice(name="Esportes", value="esportes"),
-            app_commands.Choice(name="Medicina", value="medicina"),
-            app_commands.Choice(name="Mira", value="mira"),
-            app_commands.Choice(name="Esquiva", value="esquiva"),
-            app_commands.Choice(name="Furtividade", value="furtividade")
+            app_commands.Choice(
+                name="Acadêmicos",
+                value="academicos"
+            ),
+            app_commands.Choice(
+                name="Idiomas",
+                value="idiomas"
+            ),
+            app_commands.Choice(
+                name="Ofícios",
+                value="oficios"
+            ),
+            app_commands.Choice(
+                name="Armas Brancas",
+                value="armas_brancas"
+            ),
+            app_commands.Choice(
+                name="Intimidação",
+                value="intimidacao"
+            ),
+            app_commands.Choice(
+                name="Ocultismo",
+                value="ocultismo"
+            ),
+            app_commands.Choice(
+                name="Briga",
+                value="briga"
+            ),
+            app_commands.Choice(
+                name="Investigação",
+                value="investigacao"
+            ),
+            app_commands.Choice(
+                name="Persuasão",
+                value="persuasao"
+            ),
+            app_commands.Choice(
+                name="Ciências",
+                value="ciencias"
+            ),
+            app_commands.Choice(
+                name="Lábia",
+                value="labia"
+            ),
+            app_commands.Choice(
+                name="Prontidão",
+                value="prontidao"
+            ),
+            app_commands.Choice(
+                name="Conhecimentos Gerais",
+                value="conhecimentos_gerais"
+            ),
+            app_commands.Choice(
+                name="Liderança",
+                value="lideranca"
+            ),
+            app_commands.Choice(
+                name="Sobrevivência",
+                value="sobrevivencia"
+            ),
+            app_commands.Choice(
+                name="Condução",
+                value="conducao"
+            ),
+            app_commands.Choice(
+                name="Manha",
+                value="manha"
+            ),
+            app_commands.Choice(
+                name="Tecnologia",
+                value="tecnologia"
+            ),
+            app_commands.Choice(
+                name="Esportes",
+                value="esportes"
+            ),
+            app_commands.Choice(
+                name="Medicina",
+                value="medicina"
+            ),
+            app_commands.Choice(
+                name="Mira",
+                value="mira"
+            ),
+            app_commands.Choice(
+                name="Esquiva",
+                value="esquiva"
+            ),
+            app_commands.Choice(
+                name="Furtividade",
+                value="furtividade"
+            )
         ]
     )
     async def pericia(
@@ -375,7 +486,9 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        f = transformar_ficha(dados)
+        f = transformar_ficha(
+            dados
+        )
 
         cursor.execute(
             f"""
@@ -430,7 +543,9 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        f = transformar_ficha(dados)
+        f = transformar_ficha(
+            dados
+        )
 
         if not pode_alterar_ficha(
             interaction,
@@ -470,10 +585,20 @@ def registrar_comandos_jogador(bot):
 
         db.commit()
 
+        estado_atual_hp = estado_hp(
+            hp,
+            hp
+        )
+
+        estado_atual_mana = estado_mana(
+            mana,
+            mana
+        )
+
         await interaction.response.send_message(
             f"⚙️ Ficha de **{f['nome']}** atualizada!\n\n"
-            f"❤️ HP: **{hp}/{hp}**\n"
-            f"🔵 Mana: **{mana}/{mana}**"
+            f"❤️ HP: **{hp}/{hp}** • {estado_atual_hp}\n"
+            f"🔵 Mana: **{mana}/{mana}** • {estado_atual_mana}"
         )
 
     # ========================================================
@@ -502,11 +627,18 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        f = transformar_ficha(dados)
+        f = transformar_ficha(
+            dados
+        )
 
         cursor.execute(
-            "DELETE FROM fichas WHERE id = ?",
-            (f["id"],)
+            """
+            DELETE FROM fichas
+            WHERE id = ?
+            """,
+            (
+                f["id"],
+            )
         )
 
         db.commit()
@@ -517,6 +649,7 @@ def registrar_comandos_jogador(bot):
 
     # ========================================================
     # DANO
+    # ETAPA 4.3
     # ========================================================
 
     @bot.tree.command(
@@ -556,11 +689,21 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        f = transformar_ficha(dados)
+        f = transformar_ficha(
+            dados
+        )
+
+        hp_anterior = f[
+            "hp_atual"
+        ]
 
         novo_hp = max(
             0,
-            f["hp_atual"] - valor
+            hp_anterior - valor
+        )
+
+        dano_real = (
+            hp_anterior - novo_hp
         )
 
         cursor.execute("""
@@ -574,13 +717,24 @@ def registrar_comandos_jogador(bot):
 
         db.commit()
 
+        estado = estado_hp(
+            novo_hp,
+            f["hp_max"]
+        )
+
         await interaction.response.send_message(
-            f"💥 **{f['nome']}** recebeu **{valor} de dano**!\n"
-            f"❤️ HP: **{novo_hp}/{f['hp_max']}**"
+            f"💥 **{f['nome']}** recebeu "
+            f"**{dano_real} de dano**!\n\n"
+            f"❤️ HP: "
+            f"**{hp_anterior}/{f['hp_max']}** "
+            f"→ "
+            f"**{novo_hp}/{f['hp_max']}**\n"
+            f"Estado: {estado}"
         )
 
     # ========================================================
     # CURA
+    # ETAPA 4.3
     # ========================================================
 
     @bot.tree.command(
@@ -620,14 +774,22 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        f = transformar_ficha(dados)
+        f = transformar_ficha(
+            dados
+        )
+
+        hp_anterior = f[
+            "hp_atual"
+        ]
 
         novo_hp = min(
             f["hp_max"],
-            f["hp_atual"] + valor
+            hp_anterior + valor
         )
 
-        recuperado = novo_hp - f["hp_atual"]
+        recuperado = (
+            novo_hp - hp_anterior
+        )
 
         cursor.execute("""
             UPDATE fichas
@@ -640,14 +802,24 @@ def registrar_comandos_jogador(bot):
 
         db.commit()
 
+        estado = estado_hp(
+            novo_hp,
+            f["hp_max"]
+        )
+
         await interaction.response.send_message(
             f"💚 **{f['nome']}** recuperou "
-            f"**{recuperado} de HP**!\n"
-            f"❤️ HP: **{novo_hp}/{f['hp_max']}**"
+            f"**{recuperado} de HP**!\n\n"
+            f"❤️ HP: "
+            f"**{hp_anterior}/{f['hp_max']}** "
+            f"→ "
+            f"**{novo_hp}/{f['hp_max']}**\n"
+            f"Estado: {estado}"
         )
 
     # ========================================================
     # GASTAR MANA
+    # ETAPA 4.3
     # ========================================================
 
     @bot.tree.command(
@@ -676,7 +848,9 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        f = transformar_ficha(dados)
+        f = transformar_ficha(
+            dados
+        )
 
         if valor <= 0:
 
@@ -689,15 +863,27 @@ def registrar_comandos_jogador(bot):
 
         if valor > f["mana_atual"]:
 
+            estado_atual = estado_mana(
+                f["mana_atual"],
+                f["mana_max"]
+            )
+
             await interaction.response.send_message(
-                "❌ Mana insuficiente.",
+                "❌ Mana insuficiente.\n\n"
+                f"🔵 Mana atual: "
+                f"**{f['mana_atual']}/{f['mana_max']}**\n"
+                f"Estado: {estado_atual}",
                 ephemeral=True
             )
 
             return
 
+        mana_anterior = f[
+            "mana_atual"
+        ]
+
         nova_mana = (
-            f["mana_atual"] - valor
+            mana_anterior - valor
         )
 
         cursor.execute("""
@@ -711,14 +897,24 @@ def registrar_comandos_jogador(bot):
 
         db.commit()
 
+        estado = estado_mana(
+            nova_mana,
+            f["mana_max"]
+        )
+
         await interaction.response.send_message(
             f"🔮 **{f['nome']}** gastou "
-            f"**{valor} de Mana**!\n"
-            f"🔵 Mana: **{nova_mana}/{f['mana_max']}**"
+            f"**{valor} de Mana**!\n\n"
+            f"🔵 Mana: "
+            f"**{mana_anterior}/{f['mana_max']}** "
+            f"→ "
+            f"**{nova_mana}/{f['mana_max']}**\n"
+            f"Estado: {estado}"
         )
 
     # ========================================================
     # RECUPERAR MANA
+    # ETAPA 4.3
     # ========================================================
 
     @bot.tree.command(
@@ -758,15 +954,21 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        f = transformar_ficha(dados)
+        f = transformar_ficha(
+            dados
+        )
+
+        mana_anterior = f[
+            "mana_atual"
+        ]
 
         nova_mana = min(
             f["mana_max"],
-            f["mana_atual"] + valor
+            mana_anterior + valor
         )
 
         recuperado = (
-            nova_mana - f["mana_atual"]
+            nova_mana - mana_anterior
         )
 
         cursor.execute("""
@@ -780,10 +982,19 @@ def registrar_comandos_jogador(bot):
 
         db.commit()
 
+        estado = estado_mana(
+            nova_mana,
+            f["mana_max"]
+        )
+
         await interaction.response.send_message(
             f"💧 **{f['nome']}** recuperou "
-            f"**{recuperado} de Mana**!\n"
-            f"🔵 Mana: **{nova_mana}/{f['mana_max']}**"
+            f"**{recuperado} de Mana**!\n\n"
+            f"🔵 Mana: "
+            f"**{mana_anterior}/{f['mana_max']}** "
+            f"→ "
+            f"**{nova_mana}/{f['mana_max']}**\n"
+            f"Estado: {estado}"
         )
 
     # ========================================================
@@ -818,12 +1029,18 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        f = transformar_ficha(dados)
+        f = transformar_ficha(
+            dados
+        )
 
         if (
             f["dono_id"] != interaction.user.id
-            and not eh_admin(interaction)
-            and not eh_mestre(interaction)
+            and not eh_admin(
+                interaction
+            )
+            and not eh_mestre(
+                interaction
+            )
         ):
 
             await interaction.response.send_message(
@@ -853,14 +1070,19 @@ def registrar_comandos_jogador(bot):
 
         db.commit()
 
-        cursor.execute(
-            "SELECT xp FROM fichas WHERE id = ?",
-            (f["id"],)
-        )
+        cursor.execute("""
+            SELECT xp
+            FROM fichas
+            WHERE id = ?
+        """, (
+            f["id"],
+        ))
 
         resultado = cursor.fetchone()
 
-        xp_atual = resultado[0]
+        xp_atual = resultado[
+            0
+        ]
 
         await interaction.response.send_message(
             f"✨ **{f['nome']}** recebeu "
