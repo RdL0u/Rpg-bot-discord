@@ -1,6 +1,9 @@
 import discord
 
-from database import cursor, db
+from database import (
+    cursor,
+    db
+)
 
 from config import (
     ATRIBUTOS,
@@ -18,7 +21,10 @@ from comando.permissoes import (
 # BUSCAR FICHA DO JOGADOR
 # ============================================================
 
-def buscar_ficha_jogador(channel_id, user_id):
+def buscar_ficha_jogador(
+    channel_id,
+    user_id
+):
 
     cursor.execute("""
         SELECT *
@@ -39,7 +45,9 @@ def buscar_ficha_jogador(channel_id, user_id):
 # BUSCAR FICHA PELO ID
 # ============================================================
 
-def buscar_ficha(ficha_id):
+def buscar_ficha(
+    ficha_id
+):
 
     cursor.execute("""
         SELECT *
@@ -55,16 +63,18 @@ def buscar_ficha(ficha_id):
 
 # ============================================================
 # TRANSFORMAR FICHA
+#
+# Usa a ordem REAL das colunas do SQLite.
+# Isso evita atributos/perícias com valores trocados.
 # ============================================================
 
-def transformar_ficha(dados):
+def transformar_ficha(
+    dados
+):
 
     if dados is None:
         return None
 
-    # Busca a ordem REAL das colunas da tabela no SQLite.
-    # Isso evita valores trocados mesmo que tenham ocorrido
-    # migrações com ALTER TABLE no passado.
     cursor.execute(
         "PRAGMA table_info(fichas)"
     )
@@ -78,9 +88,13 @@ def transformar_ficha(dados):
 
     ficha = {}
 
-    for indice, valor in enumerate(dados):
+    for indice, valor in enumerate(
+        dados
+    ):
 
-        if indice < len(colunas_reais):
+        if indice < len(
+            colunas_reais
+        ):
 
             nome_coluna = colunas_reais[
                 indice
@@ -92,11 +106,15 @@ def transformar_ficha(dados):
 
     return ficha
 
+
 # ============================================================
 # ATUALIZAR HP
 # ============================================================
 
-def atualizar_hp(ficha_id, novo_hp):
+def atualizar_hp(
+    ficha_id,
+    novo_hp
+):
 
     cursor.execute("""
         UPDATE fichas
@@ -114,7 +132,10 @@ def atualizar_hp(ficha_id, novo_hp):
 # ATUALIZAR MANA
 # ============================================================
 
-def atualizar_mana(ficha_id, nova_mana):
+def atualizar_mana(
+    ficha_id,
+    nova_mana
+):
 
     cursor.execute("""
         UPDATE fichas
@@ -129,10 +150,13 @@ def atualizar_mana(ficha_id, nova_mana):
 
 
 # ============================================================
-# ATUALIZAR XP
+# ADICIONAR XP
 # ============================================================
 
-def adicionar_xp(ficha_id, valor):
+def adicionar_xp(
+    ficha_id,
+    valor
+):
 
     cursor.execute("""
         UPDATE fichas
@@ -150,7 +174,9 @@ def adicionar_xp(ficha_id, valor):
 # DELETAR FICHA
 # ============================================================
 
-def deletar_ficha(ficha_id):
+def deletar_ficha(
+    ficha_id
+):
 
     cursor.execute("""
         DELETE FROM fichas
@@ -164,31 +190,112 @@ def deletar_ficha(ficha_id):
 
 # ============================================================
 # CALCULAR RC
+#
+# RC = Esquiva + Destreza + 5
 # ============================================================
 
-def calcular_rc(ficha):
+def calcular_rc(
+    ficha
+):
 
     return (
-        ficha.get("esquiva", 0)
-        + ficha.get("destreza", 0)
-        + 5
+        ficha.get(
+            "esquiva",
+            0
+        )
+        +
+        ficha.get(
+            "destreza",
+            0
+        )
+        +
+        5
     )
 
 
 # ============================================================
-# ESTADO DE RECURSO
+# ESTADO DO HP
 # ============================================================
 
-def estado_recurso(atual, maximo):
+def estado_hp(
+    atual,
+    maximo
+):
+
+    if (
+        maximo <= 0
+        or atual <= 0
+    ):
+
+        return "⚫ INCAPACITADO"
+
+    percentual = (
+        atual / maximo
+    ) * 100
+
+    if percentual < 30:
+
+        return "🔴 CRÍTICO"
+
+    if percentual <= 40:
+
+        return "🟡 FERIDO"
+
+    return "🟢 ESTÁVEL"
+
+
+# ============================================================
+# ESTADO DA MANA
+# ============================================================
+
+def estado_mana(
+    atual,
+    maximo
+):
+
+    if (
+        maximo <= 0
+        or atual <= 0
+    ):
+
+        return "⚫ ESGOTADA"
+
+    percentual = (
+        atual / maximo
+    ) * 100
+
+    if percentual < 30:
+
+        return "🔴 CRÍTICA"
+
+    if percentual <= 40:
+
+        return "🟡 BAIXA"
+
+    return "🟢 PLENA"
+
+
+# ============================================================
+# ESTADO DE RECURSO
+#
+# Mantido por compatibilidade caso outro arquivo ainda importe
+# esta função.
+# ============================================================
+
+def estado_recurso(
+    atual,
+    maximo
+):
 
     if maximo <= 0:
+
         return "0/0"
 
     return f"{atual}/{maximo}"
 
 
 # ============================================================
-# PERMISSÃO DE EDIÇÃO
+# VERIFICAR SE PODE ALTERAR FICHA
 # ============================================================
 
 def pode_alterar_ficha(
@@ -199,39 +306,62 @@ def pode_alterar_ficha(
     if ficha is None:
         return False
 
+    # ========================================================
     # ADMINISTRADOR
-    if eh_admin(interaction):
+    # ========================================================
+
+    if eh_admin(
+        interaction
+    ):
+
         return True
 
     tipo = ficha.get(
         "tipo"
     )
 
-    # JOGADOR PODE EDITAR A PRÓPRIA FICHA
+    # ========================================================
+    # FICHA DE JOGADOR
+    # ========================================================
+
     if tipo == "jogador":
 
         if (
-            ficha.get("dono_id")
+            ficha.get(
+                "dono_id"
+            )
             == interaction.user.id
         ):
+
             return True
 
-        # MESTRE DA MESA
-        if eh_mestre(interaction):
+        if eh_mestre(
+            interaction
+        ):
+
             return True
 
         return False
 
-    # NPC — MESTRE OU ADMIN
+    # ========================================================
+    # NPC
+    # ========================================================
+
     if tipo == "npc":
 
-        if eh_mestre(interaction):
+        if eh_mestre(
+            interaction
+        ):
+
             return True
 
         if (
-            ficha.get("mestre_id")
+            ficha.get(
+                "mestre_id"
+            )
             == interaction.user.id
         ):
+
             return True
 
         return False
@@ -243,15 +373,18 @@ def pode_alterar_ficha(
 # FORMATAR PERÍCIAS
 # ============================================================
 
-def formatar_pericias(ficha):
+def formatar_pericias(
+    ficha
+):
 
     linhas = []
 
     for chave in ORDEM_PERICIAS:
 
-        emoji, nome = PERICIAS[chave]
+        emoji, nome = PERICIAS[
+            chave
+        ]
 
-        # Limpeza preventiva
         nome = nome.replace(
             "'''",
             ""
@@ -312,8 +445,25 @@ def criar_pagina_status(
         ficha
     )
 
+    # ========================================================
+    # ESTADOS
+    # ========================================================
+
+    estado_atual_hp = estado_hp(
+        hp_atual,
+        hp_max
+    )
+
+    estado_atual_mana = estado_mana(
+        mana_atual,
+        mana_max
+    )
+
     embed = discord.Embed(
-        title=f"📜 FICHA DE {nome.upper()}",
+        title=(
+            f"📜 FICHA DE "
+            f"{nome.upper()}"
+        ),
         color=discord.Color.dark_red()
     )
 
@@ -324,8 +474,12 @@ def criar_pagina_status(
     embed.add_field(
         name="❤️ STATUS",
         value=(
-            f"❤️ HP: **{hp_atual}/{hp_max}**    "
-            f"🔵 Mana: **{mana_atual}/{mana_max}**\n"
+            f"❤️ HP: **{hp_atual}/{hp_max}** "
+            f"• {estado_atual_hp}\n"
+
+            f"🔵 Mana: **{mana_atual}/{mana_max}** "
+            f"• {estado_atual_mana}\n"
+
             f"✨ XP: **{xp}**    "
             f"⚡ RC: **{rc}**"
         ),
@@ -333,7 +487,7 @@ def criar_pagina_status(
     )
 
     # ========================================================
-    # ATRIBUTOS — 2 COLUNAS
+    # ATRIBUTOS — DUAS COLUNAS VISUAIS
     # ========================================================
 
     atributos = (
@@ -369,7 +523,10 @@ def criar_pagina_status(
     else:
 
         embed.set_footer(
-            text="Página 1/2 • Status e Atributos"
+            text=(
+                "Página 1/2 "
+                "• Status e Atributos"
+            )
         )
 
     return embed
@@ -390,7 +547,10 @@ def criar_pagina_pericias(
     )
 
     embed = discord.Embed(
-        title=f"📜 FICHA DE {nome.upper()}",
+        title=(
+            f"📜 FICHA DE "
+            f"{nome.upper()}"
+        ),
         color=discord.Color.dark_red()
     )
 
@@ -398,15 +558,26 @@ def criar_pagina_pericias(
         ficha
     )
 
+    texto_pericias = "\n".join(
+        linhas
+    )
+
+    # ========================================================
+    # PERÍCIAS — UMA COLUNA
+    # ========================================================
+
     embed.add_field(
         name="📚 PERÍCIAS",
         value=(
-            "\n".join(linhas)
-            if linhas
-            else "Nenhuma"
+            texto_pericias
+            or "Nenhuma"
         ),
         inline=False
     )
+
+    # ========================================================
+    # RODAPÉ
+    # ========================================================
 
     if jogador is not None:
 
@@ -420,7 +591,10 @@ def criar_pagina_pericias(
     else:
 
         embed.set_footer(
-            text="Página 2/2 • Perícias"
+            text=(
+                "Página 2/2 "
+                "• Perícias"
+            )
         )
 
     return embed
@@ -450,6 +624,7 @@ class ModalEditarAtributo(
 
         self.ficha = ficha
         self.atributo = atributo
+
         self.emoji = emoji
         self.nome = nome
 
@@ -485,9 +660,11 @@ class ModalEditarAtributo(
                 "❌ Você não pode editar esta ficha.",
                 ephemeral=True
             )
+
             return
 
         try:
+
             novo_valor = int(
                 self.valor.value
             )
@@ -498,6 +675,7 @@ class ModalEditarAtributo(
                 "❌ Informe um número inteiro.",
                 ephemeral=True
             )
+
             return
 
         if novo_valor < 0:
@@ -506,6 +684,7 @@ class ModalEditarAtributo(
                 "❌ O valor não pode ser negativo.",
                 ephemeral=True
             )
+
             return
 
         if (
@@ -517,6 +696,7 @@ class ModalEditarAtributo(
                 "❌ Atributo inválido.",
                 ephemeral=True
             )
+
             return
 
         anterior = self.ficha.get(
@@ -532,7 +712,9 @@ class ModalEditarAtributo(
             """,
             (
                 novo_valor,
-                self.ficha["id"]
+                self.ficha[
+                    "id"
+                ]
             )
         )
 
@@ -564,8 +746,6 @@ class MenuAtributos(
 
         self.ficha = ficha
 
-        opcoes = []
-
         nomes_completos = {
             "forca": "Força",
             "destreza": "Destreza",
@@ -575,17 +755,20 @@ class MenuAtributos(
             "raciocinio": "Raciocínio"
         }
 
+        opcoes = []
+
         for chave in ATRIBUTOS:
 
-            emoji, _ = ATRIBUTOS[
+            emoji, nome_curto = ATRIBUTOS[
                 chave
             ]
 
             opcoes.append(
                 discord.SelectOption(
-                    label=nomes_completos[
-                        chave
-                    ],
+                    label=nomes_completos.get(
+                        chave,
+                        nome_curto
+                    ),
                     emoji=emoji,
                     value=chave,
                     description=(
@@ -612,19 +795,27 @@ class MenuAtributos(
             interaction,
             self.ficha
         ):
+
             await interaction.response.send_message(
                 "❌ Você não pode editar esta ficha.",
                 ephemeral=True
             )
+
             return
 
         await interaction.response.send_modal(
             ModalEditarAtributo(
                 self.ficha,
-                self.values[0]
+                self.values[
+                    0
+                ]
             )
         )
 
+
+# ============================================================
+# VIEW — ATRIBUTOS
+# ============================================================
 
 class MenuAtributosView(
     discord.ui.View
@@ -665,11 +856,14 @@ class ModalEditarPericia(
         ]
 
         super().__init__(
-            title=f"Editar {nome}"[:45]
+            title=(
+                f"Editar {nome}"
+            )[:45]
         )
 
         self.ficha = ficha
         self.pericia = pericia
+
         self.emoji = emoji
         self.nome = nome
 
@@ -705,9 +899,11 @@ class ModalEditarPericia(
                 "❌ Você não pode editar esta ficha.",
                 ephemeral=True
             )
+
             return
 
         try:
+
             novo_valor = int(
                 self.valor.value
             )
@@ -718,6 +914,7 @@ class ModalEditarPericia(
                 "❌ Informe um número inteiro.",
                 ephemeral=True
             )
+
             return
 
         if novo_valor < 0:
@@ -726,6 +923,7 @@ class ModalEditarPericia(
                 "❌ O valor não pode ser negativo.",
                 ephemeral=True
             )
+
             return
 
         if (
@@ -737,6 +935,7 @@ class ModalEditarPericia(
                 "❌ Perícia inválida.",
                 ephemeral=True
             )
+
             return
 
         anterior = self.ficha.get(
@@ -752,7 +951,9 @@ class ModalEditarPericia(
             """,
             (
                 novo_valor,
-                self.ficha["id"]
+                self.ficha[
+                    "id"
+                ]
             )
         )
 
@@ -826,15 +1027,22 @@ class MenuPericias(
                 "❌ Você não pode editar esta ficha.",
                 ephemeral=True
             )
+
             return
 
         await interaction.response.send_modal(
             ModalEditarPericia(
                 self.ficha,
-                self.values[0]
+                self.values[
+                    0
+                ]
             )
         )
 
+
+# ============================================================
+# VIEW — PERÍCIAS
+# ============================================================
 
 class MenuPericiasView(
     discord.ui.View
@@ -954,6 +1162,7 @@ class ModalEditarRecursos(
                 "❌ Você não pode editar esta ficha.",
                 ephemeral=True
             )
+
             return
 
         try:
@@ -980,6 +1189,7 @@ class ModalEditarRecursos(
                 "❌ Todos os valores precisam ser números inteiros.",
                 ephemeral=True
             )
+
             return
 
         if hp_max <= 0:
@@ -988,6 +1198,7 @@ class ModalEditarRecursos(
                 "❌ O HP máximo precisa ser maior que 0.",
                 ephemeral=True
             )
+
             return
 
         if mana_max < 0:
@@ -996,6 +1207,7 @@ class ModalEditarRecursos(
                 "❌ A Mana máxima não pode ser negativa.",
                 ephemeral=True
             )
+
             return
 
         if (
@@ -1004,9 +1216,11 @@ class ModalEditarRecursos(
         ):
 
             await interaction.response.send_message(
-                "❌ O HP atual precisa estar entre 0 e o HP máximo.",
+                "❌ O HP atual precisa estar entre "
+                "0 e o HP máximo.",
                 ephemeral=True
             )
+
             return
 
         if (
@@ -1015,9 +1229,11 @@ class ModalEditarRecursos(
         ):
 
             await interaction.response.send_message(
-                "❌ A Mana atual precisa estar entre 0 e a Mana máxima.",
+                "❌ A Mana atual precisa estar entre "
+                "0 e a Mana máxima.",
                 ephemeral=True
             )
+
             return
 
         cursor.execute("""
@@ -1032,7 +1248,9 @@ class ModalEditarRecursos(
             hp_max,
             mana_atual,
             mana_max,
-            self.ficha["id"]
+            self.ficha[
+                "id"
+            ]
         ))
 
         db.commit()
@@ -1053,10 +1271,22 @@ class ModalEditarRecursos(
             "mana_max"
         ] = mana_max
 
+        hp_estado = estado_hp(
+            hp_atual,
+            hp_max
+        )
+
+        mana_estado = estado_mana(
+            mana_atual,
+            mana_max
+        )
+
         await interaction.response.send_message(
             "❤️🔵 **HP e Mana atualizados!**\n\n"
-            f"❤️ HP: **{hp_atual}/{hp_max}**\n"
-            f"🔵 Mana: **{mana_atual}/{mana_max}**",
+            f"❤️ HP: **{hp_atual}/{hp_max}** "
+            f"• {hp_estado}\n"
+            f"🔵 Mana: **{mana_atual}/{mana_max}** "
+            f"• {mana_estado}",
             ephemeral=True
         )
 
@@ -1112,6 +1342,7 @@ class ModalEditarXP(
                 "❌ Você não pode editar esta ficha.",
                 ephemeral=True
             )
+
             return
 
         try:
@@ -1126,6 +1357,7 @@ class ModalEditarXP(
                 "❌ O XP precisa ser um número inteiro.",
                 ephemeral=True
             )
+
             return
 
         if novo_xp < 0:
@@ -1134,6 +1366,7 @@ class ModalEditarXP(
                 "❌ O XP não pode ser negativo.",
                 ephemeral=True
             )
+
             return
 
         anterior = self.ficha.get(
@@ -1147,7 +1380,9 @@ class ModalEditarXP(
             WHERE id = ?
         """, (
             novo_xp,
-            self.ficha["id"]
+            self.ficha[
+                "id"
+            ]
         ))
 
         db.commit()
@@ -1187,18 +1422,21 @@ class MenuEdicao(
                 emoji="📊",
                 value="atributos"
             ),
+
             discord.SelectOption(
                 label="Perícias",
                 description="Editar perícias.",
                 emoji="📚",
                 value="pericias"
             ),
+
             discord.SelectOption(
                 label="HP / Mana",
                 description="Editar HP e Mana.",
                 emoji="❤️",
                 value="recursos"
             ),
+
             discord.SelectOption(
                 label="XP",
                 description="Editar XP.",
@@ -1229,9 +1467,12 @@ class MenuEdicao(
                 "❌ Você não pode editar esta ficha.",
                 ephemeral=True
             )
+
             return
 
-        escolha = self.values[0]
+        escolha = self.values[
+            0
+        ]
 
         # ====================================================
         # ATRIBUTOS
@@ -1342,6 +1583,7 @@ class FichaView(
 
         self.ficha = ficha
         self.jogador = jogador
+
         self.pagina = 1
 
         self.atualizar_botoes()
@@ -1351,7 +1593,9 @@ class FichaView(
     # ATUALIZAR BOTÕES
     # ========================================================
 
-    def atualizar_botoes(self):
+    def atualizar_botoes(
+        self
+    ):
 
         self.status_button.disabled = (
             self.pagina == 1
@@ -1363,7 +1607,7 @@ class FichaView(
 
 
     # ========================================================
-    # BOTÃO STATUS
+    # STATUS
     # ========================================================
 
     @discord.ui.button(
@@ -1391,7 +1635,7 @@ class FichaView(
 
 
     # ========================================================
-    # BOTÃO PERÍCIAS
+    # PERÍCIAS
     # ========================================================
 
     @discord.ui.button(
@@ -1419,7 +1663,7 @@ class FichaView(
 
 
     # ========================================================
-    # BOTÃO EDITAR
+    # EDITAR
     # ========================================================
 
     @discord.ui.button(
@@ -1439,9 +1683,11 @@ class FichaView(
         ):
 
             await interaction.response.send_message(
-                "❌ Você não tem permissão para editar esta ficha.",
+                "❌ Você não tem permissão "
+                "para editar esta ficha.",
                 ephemeral=True
             )
+
             return
 
         await interaction.response.send_message(
