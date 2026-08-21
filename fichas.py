@@ -62,67 +62,35 @@ def transformar_ficha(dados):
     if dados is None:
         return None
 
-    # IMPORTANTE:
-    # A ordem precisa permanecer igual à estrutura da tabela.
-    colunas = [
-        "id",
-        "channel_id",
-        "dono_id",
-        "mestre_id",
-        "tipo",
-        "nome",
+    # Busca a ordem REAL das colunas da tabela no SQLite.
+    # Isso evita valores trocados mesmo que tenham ocorrido
+    # migrações com ALTER TABLE no passado.
+    cursor.execute(
+        "PRAGMA table_info(fichas)"
+    )
 
-        "hp_atual",
-        "hp_max",
+    informacoes_colunas = cursor.fetchall()
 
-        "mana_atual",
-        "mana_max",
-
-        "xp",
-
-        "forca",
-        "destreza",
-        "vigor",
-        "inteligencia",
-        "carisma",
-        "raciocinio",
-
-        "academicos",
-        "idiomas",
-        "oficios",
-        "armas_brancas",
-        "intimidacao",
-        "ocultismo",
-        "briga",
-        "investigacao",
-        "persuasao",
-        "ciencias",
-        "labia",
-        "prontidao",
-        "conhecimentos_gerais",
-        "lideranca",
-        "sobrevivencia",
-        "conducao",
-        "manha",
-        "tecnologia",
-        "esportes",
-        "medicina",
-        "mira",
-        "esquiva",
-        "furtividade",
-
-        "aleatorio"
+    colunas_reais = [
+        coluna[1]
+        for coluna in informacoes_colunas
     ]
 
     ficha = {}
 
-    for indice, coluna in enumerate(colunas):
+    for indice, valor in enumerate(dados):
 
-        if indice < len(dados):
-            ficha[coluna] = dados[indice]
+        if indice < len(colunas_reais):
+
+            nome_coluna = colunas_reais[
+                indice
+            ]
+
+            ficha[
+                nome_coluna
+            ] = valor
 
     return ficha
-
 
 # ============================================================
 # ATUALIZAR HP
