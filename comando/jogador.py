@@ -1,4 +1,4 @@
-import discord
+ import discord
 
 from discord import app_commands
 
@@ -104,6 +104,7 @@ class DanoModal(
         self.add_item(
             self.valor
         )
+
 
     async def on_submit(
         self,
@@ -216,20 +217,21 @@ class DanoModal(
             db.commit()
 
             await interaction.response.send_message(
-                f"💥 **{f['nome']} #{f['id']}** recebeu "
-                f"**{dano_real} de dano**!\n\n"
-                f"❤️ HP: "
+                f"💀 **NPC DERROTADO**\n\n"
+                f"**{f['nome']} #{f['id']}** recebeu "
+                f"**{dano_real} de dano**.\n\n"
+                f"❤️ **HP**\n"
                 f"**{hp_anterior}/{f['hp_max']}** "
                 f"→ "
-                f"**0/{f['hp_max']}**\n\n"
-                f"💀 **DERROTADO**\n"
-                f"🗑️ O NPC foi removido da mesa."
+                f"**0/{f['hp_max']}**\n"
+                f"💀 **DERROTADO**\n\n"
+                f"🗑️ NPC removido da mesa."
             )
 
             return
 
         # ====================================================
-        # JOGADOR OU NPC QUE SOBREVIVEU
+        # ATUALIZAR HP
         # ====================================================
 
         cursor.execute("""
@@ -271,13 +273,14 @@ class DanoModal(
         # ====================================================
 
         await interaction.response.send_message(
-            f"💥 **{nome_visual}** recebeu "
-            f"**{dano_real} de dano**!\n\n"
-            f"❤️ HP: "
+            f"💥 **DANO**\n\n"
+            f"**{nome_visual}** recebeu "
+            f"**{dano_real} de dano**.\n\n"
+            f"❤️ **HP**\n"
             f"**{hp_anterior}/{f['hp_max']}** "
             f"→ "
             f"**{novo_hp}/{f['hp_max']}**\n"
-            f"Estado: {estado}"
+            f"{estado}"
         )
 
 
@@ -324,10 +327,6 @@ class DanoAlvoSelect(
             tipo
         ) in resultados:
 
-            # ================================================
-            # NPC
-            # ================================================
-
             if tipo == "npc":
 
                 label = (
@@ -339,10 +338,6 @@ class DanoAlvoSelect(
                 descricao = (
                     f"NPC • ID {ficha_id}"
                 )
-
-            # ================================================
-            # JOGADOR
-            # ================================================
 
             else:
 
@@ -370,14 +365,11 @@ class DanoAlvoSelect(
             options=opcoes
         )
 
+
     async def callback(
         self,
         interaction: discord.Interaction
     ):
-
-        # ====================================================
-        # SOMENTE QUEM ABRIU O MENU
-        # ====================================================
 
         if (
             interaction.user.id
@@ -993,9 +985,13 @@ def registrar_comandos_jogador(bot):
         )
 
         await interaction.response.send_message(
-            f"⚙️ Ficha de **{f['nome']}** atualizada!\n\n"
-            f"❤️ HP: **{hp}/{hp}** • {estado_atual_hp}\n"
-            f"🔵 Mana: **{mana}/{mana}** • "
+            f"⚙️ **FICHA ATUALIZADA**\n\n"
+            f"**{f['nome']}**\n\n"
+            f"❤️ **HP**\n"
+            f"**{hp}/{hp}**\n"
+            f"{estado_atual_hp}\n\n"
+            f"🔵 **Mana**\n"
+            f"**{mana}/{mana}**\n"
             f"{estado_atual_mana}"
         )
 
@@ -1044,7 +1040,6 @@ def registrar_comandos_jogador(bot):
 
     # ========================================================
     # DANO
-    # ETAPA 4.4
     # ========================================================
 
     @bot.tree.command(
@@ -1157,13 +1152,14 @@ def registrar_comandos_jogador(bot):
         )
 
         await interaction.response.send_message(
-            f"💚 **{f['nome']}** recuperou "
-            f"**{recuperado} de HP**!\n\n"
-            f"❤️ HP: "
+            f"💚 **CURA**\n\n"
+            f"**{f['nome']}** recuperou "
+            f"**{recuperado} de HP**.\n\n"
+            f"❤️ **HP**\n"
             f"**{hp_anterior}/{f['hp_max']}** "
             f"→ "
             f"**{novo_hp}/{f['hp_max']}**\n"
-            f"Estado: {estado}"
+            f"{estado}"
         )
 
     # ========================================================
@@ -1217,10 +1213,10 @@ def registrar_comandos_jogador(bot):
             )
 
             await interaction.response.send_message(
-                "❌ Mana insuficiente.\n\n"
-                f"🔵 Mana atual: "
+                f"❌ **MANA INSUFICIENTE**\n\n"
+                f"🔵 **Mana**\n"
                 f"**{f['mana_atual']}/{f['mana_max']}**\n"
-                f"Estado: {estado_atual}",
+                f"{estado_atual}",
                 ephemeral=True
             )
 
@@ -1251,13 +1247,14 @@ def registrar_comandos_jogador(bot):
         )
 
         await interaction.response.send_message(
-            f"🔮 **{f['nome']}** gastou "
-            f"**{valor} de Mana**!\n\n"
-            f"🔵 Mana: "
+            f"🔮 **MANA CONSUMIDA**\n\n"
+            f"**{f['nome']}** gastou "
+            f"**{valor} de Mana**.\n\n"
+            f"🔵 **Mana**\n"
             f"**{mana_anterior}/{f['mana_max']}** "
             f"→ "
             f"**{nova_mana}/{f['mana_max']}**\n"
-            f"Estado: {estado}"
+            f"{estado}"
         )
 
     # ========================================================
@@ -1335,13 +1332,14 @@ def registrar_comandos_jogador(bot):
         )
 
         await interaction.response.send_message(
-            f"💧 **{f['nome']}** recuperou "
-            f"**{recuperado} de Mana**!\n\n"
-            f"🔵 Mana: "
+            f"💧 **MANA RECUPERADA**\n\n"
+            f"**{f['nome']}** recuperou "
+            f"**{recuperado} de Mana**.\n\n"
+            f"🔵 **Mana**\n"
             f"**{mana_anterior}/{f['mana_max']}** "
             f"→ "
             f"**{nova_mana}/{f['mana_max']}**\n"
-            f"Estado: {estado}"
+            f"{estado}"
         )
 
     # ========================================================
@@ -1433,7 +1431,8 @@ def registrar_comandos_jogador(bot):
         ]
 
         await interaction.response.send_message(
-            f"✨ **{f['nome']}** recebeu "
-            f"**{valor} XP**!\n"
+            f"✨ **XP ADICIONADO**\n\n"
+            f"**{f['nome']}** recebeu "
+            f"**{valor} XP**.\n\n"
             f"✨ XP atual: **{xp_atual}**"
         )
