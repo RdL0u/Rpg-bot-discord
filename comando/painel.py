@@ -1,4 +1,7 @@
+import math
 import discord
+
+from discord import app_commands
 
 from database import cursor
 
@@ -13,8 +16,7 @@ from fichas import (
 # CONFIGURAÇÃO DO PAINEL
 # ============================================================
 
-LIMITE_JOGADORES = 10
-LIMITE_NPCS = 10
+ITENS_POR_PAGINA = 5
 
 
 # ============================================================
@@ -203,106 +205,165 @@ def formatar_npc(
 
 
 # ============================================================
-# CRIAR TEXTO DOS JOGADORES
+# MONTAR ITENS DO PAINEL
 # ============================================================
 
-def criar_texto_jogadores(
+def montar_itens_painel(
     jogadores,
-    guild
+    npcs,
+    tipo
 ):
 
-    if not jogadores:
+    itens = []
 
-        return (
-            "Nenhum jogador possui ficha "
-            "nesta mesa."
-        )
+    # ========================================================
+    # SOMENTE JOGADORES
+    # ========================================================
 
-    blocos = []
+    if tipo == "jogadores":
 
-    jogadores_visiveis = jogadores[
-        :LIMITE_JOGADORES
-    ]
+        for ficha in jogadores:
 
-    for ficha in jogadores_visiveis:
-
-        blocos.append(
-            formatar_jogador(
-                ficha,
-                guild
+            itens.append(
+                (
+                    "jogador",
+                    ficha
+                )
             )
-        )
 
-    restantes = (
-        len(jogadores)
-        - len(jogadores_visiveis)
-    )
+        return itens
 
-    if restantes > 0:
+    # ========================================================
+    # SOMENTE NPCS
+    # ========================================================
 
-        blocos.append(
-            f"➕ **{restantes} jogador(es) "
-            f"não exibido(s)**"
-        )
+    if tipo == "npcs":
 
-    return "\n\n".join(
-        blocos
-    )
+        for ficha in npcs:
 
+            itens.append(
+                (
+                    "npc",
+                    ficha
+                )
+            )
 
-# ============================================================
-# CRIAR TEXTO DOS NPCS
-# ============================================================
+        return itens
 
-def criar_texto_npcs(
-    npcs
-):
+    # ========================================================
+    # AMBOS
+    # ========================================================
 
-    if not npcs:
+    for ficha in jogadores:
 
-        return (
-            "Nenhum NPC ativo "
-            "nesta mesa."
-        )
-
-    blocos = []
-
-    npcs_visiveis = npcs[
-        :LIMITE_NPCS
-    ]
-
-    for ficha in npcs_visiveis:
-
-        blocos.append(
-            formatar_npc(
+        itens.append(
+            (
+                "jogador",
                 ficha
             )
         )
 
-    restantes = (
-        len(npcs)
-        - len(npcs_visiveis)
-    )
+    for ficha in npcs:
 
-    if restantes > 0:
-
-        blocos.append(
-            f"➕ **{restantes} NPC(s) "
-            f"não exibido(s)**"
+        itens.append(
+            (
+                "npc",
+                ficha
+            )
         )
 
-    return "\n\n".join(
-        blocos
+    return itens
+
+
+# ============================================================
+# TOTAL DE PÁGINAS
+# ============================================================
+
+def calcular_total_paginas(
+    quantidade
+):
+
+    if quantidade <= 0:
+
+        return 1
+
+    return math.ceil(
+        quantidade
+        / ITENS_POR_PAGINA
     )
 
 
 # ============================================================
-# CRIAR EMBED DO PAINEL
+# TÍTULO DO PAINEL
 # ============================================================
 
-def criar_painel(
+def obter_titulo_painel(
+    tipo
+):
+
+    if tipo == "jogadores":
+
+        return (
+            "👤 PAINEL DE JOGADORES"
+        )
+
+    if tipo == "npcs":
+
+        return (
+            "👹 PAINEL DE NPCs"
+        )
+
+    return (
+        "📋 PAINEL DA MESA"
+    )
+
+
+# ============================================================
+# DESCRIÇÃO DO PAINEL
+# ============================================================
+
+def obter_descricao_painel(
+    jogadores,
+    npcs,
+    tipo
+):
+
+    if tipo == "jogadores":
+
+        return (
+            f"👤 Jogadores ativos: "
+            f"**{len(jogadores)}**"
+        )
+
+    if tipo == "npcs":
+
+        return (
+            f"👹 NPCs ativos: "
+            f"**{len(npcs)}**"
+        )
+
+    total = (
+        len(jogadores)
+        + len(npcs)
+    )
+
+    return (
+        f"📊 **Resumo da mesa**\n\n"
+        f"👤 Jogadores: **{len(jogadores)}**\n"
+        f"👹 NPCs: **{len(npcs)}**\n"
+        f"📜 Total de fichas: **{total}**"
+    )
+
+
+# ============================================================
+# CRIAR PÁGINA DO PAINEL
+# ============================================================
+
+def criar_pagina_painel(
     channel_id,
-    guild
+    guild,
+    pagina,
+    tipo
 ):
 
     jogadores, npcs = (
@@ -311,61 +372,374 @@ def criar_painel(
         )
     )
 
-    total_jogadores = len(
-        jogadores
+    itens = montar_itens_painel(
+        jogadores,
+        npcs,
+        tipo
     )
 
-    total_npcs = len(
-        npcs
+    total_itens = len(
+        itens
     )
 
-    total_fichas = (
-        total_jogadores
-        + total_npcs
+    total_paginas = (
+        calcular_total_paginas(
+            total_itens
+        )
     )
+
+    if pagina < 0:
+
+        pagina = 0
+
+    if pagina >= total_paginas:
+
+        pagina = (
+            total_paginas - 1
+        )
+
+    inicio = (
+        pagina
+        * ITENS_POR_PAGINA
+    )
+
+    fim = (
+        inicio
+        + ITENS_POR_PAGINA
+    )
+
+    itens_pagina = itens[
+        inicio:fim
+    ]
 
     embed = discord.Embed(
-        title="📋 PAINEL DA MESA",
-        description=(
-            f"📊 **Resumo da mesa**\n\n"
-            f"👤 Jogadores: **{total_jogadores}**\n"
-            f"👹 NPCs: **{total_npcs}**\n"
-            f"📜 Total de fichas: **{total_fichas}**"
+        title=obter_titulo_painel(
+            tipo
+        ),
+        description=obter_descricao_painel(
+            jogadores,
+            npcs,
+            tipo
         ),
         color=discord.Color.dark_red()
     )
 
-    embed.add_field(
-        name=(
-            f"👤 JOGADORES "
-            f"({total_jogadores})"
-        ),
-        value=criar_texto_jogadores(
-            jogadores,
-            guild
-        ),
-        inline=False
-    )
+    jogadores_pagina = []
 
-    embed.add_field(
-        name=(
-            f"👹 NPCs "
-            f"({total_npcs})"
-        ),
-        value=criar_texto_npcs(
-            npcs
-        ),
-        inline=False
-    )
+    npcs_pagina = []
+
+    for tipo_ficha, ficha in itens_pagina:
+
+        if tipo_ficha == "jogador":
+
+            jogadores_pagina.append(
+                ficha
+            )
+
+        elif tipo_ficha == "npc":
+
+            npcs_pagina.append(
+                ficha
+            )
+
+    # ========================================================
+    # JOGADORES
+    # ========================================================
+
+    if jogadores_pagina:
+
+        texto_jogadores = []
+
+        for ficha in jogadores_pagina:
+
+            texto_jogadores.append(
+                formatar_jogador(
+                    ficha,
+                    guild
+                )
+            )
+
+        embed.add_field(
+            name="👤 JOGADORES",
+            value="\n\n".join(
+                texto_jogadores
+            ),
+            inline=False
+        )
+
+    # ========================================================
+    # NPCS
+    # ========================================================
+
+    if npcs_pagina:
+
+        texto_npcs = []
+
+        for ficha in npcs_pagina:
+
+            texto_npcs.append(
+                formatar_npc(
+                    ficha
+                )
+            )
+
+        embed.add_field(
+            name="👹 NPCs",
+            value="\n\n".join(
+                texto_npcs
+            ),
+            inline=False
+        )
+
+    # ========================================================
+    # LISTA VAZIA
+    # ========================================================
+
+    if not itens_pagina:
+
+        if tipo == "jogadores":
+
+            mensagem_vazia = (
+                "Nenhum jogador possui "
+                "ficha nesta mesa."
+            )
+
+        elif tipo == "npcs":
+
+            mensagem_vazia = (
+                "Nenhum NPC ativo "
+                "nesta mesa."
+            )
+
+        else:
+
+            mensagem_vazia = (
+                "Não existem fichas "
+                "nesta mesa."
+            )
+
+        embed.add_field(
+            name="📭 Nenhuma ficha",
+            value=mensagem_vazia,
+            inline=False
+        )
 
     embed.set_footer(
         text=(
-            "Painel da Mesa • "
-            "Jogadores 👤 • NPCs 👹"
+            f"Página {pagina + 1}/{total_paginas} "
+            f"• {total_itens} ficha(s)"
         )
     )
 
-    return embed
+    return (
+        embed,
+        total_paginas
+    )
+
+
+# ============================================================
+# VIEW DO PAINEL
+# ============================================================
+
+class PainelView(
+    discord.ui.View
+):
+
+    def __init__(
+        self,
+        channel_id,
+        guild,
+        autor_id,
+        tipo,
+        pagina=0
+    ):
+
+        super().__init__(
+            timeout=300
+        )
+
+        self.channel_id = (
+            channel_id
+        )
+
+        self.guild = guild
+
+        self.autor_id = (
+            autor_id
+        )
+
+        self.tipo = (
+            tipo
+        )
+
+        self.pagina = (
+            pagina
+        )
+
+        self.atualizar_total_paginas()
+
+        self.atualizar_botoes()
+
+
+    # ========================================================
+    # RECALCULAR TOTAL DE PÁGINAS
+    # ========================================================
+
+    def atualizar_total_paginas(
+        self
+    ):
+
+        jogadores, npcs = (
+            buscar_fichas_painel(
+                self.channel_id
+            )
+        )
+
+        itens = montar_itens_painel(
+            jogadores,
+            npcs,
+            self.tipo
+        )
+
+        self.total_paginas = (
+            calcular_total_paginas(
+                len(itens)
+            )
+        )
+
+
+    # ========================================================
+    # ATUALIZAR BOTÕES
+    # ========================================================
+
+    def atualizar_botoes(
+        self
+    ):
+
+        self.anterior.disabled = (
+            self.pagina <= 0
+        )
+
+        self.proxima.disabled = (
+            self.pagina
+            >= self.total_paginas - 1
+        )
+
+
+    # ========================================================
+    # VERIFICAR USUÁRIO
+    # ========================================================
+
+    async def interaction_check(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if (
+            interaction.user.id
+            != self.autor_id
+        ):
+
+            await interaction.response.send_message(
+                "❌ Somente quem abriu o painel "
+                "pode usar estes botões.",
+                ephemeral=True
+            )
+
+            return False
+
+        return True
+
+
+    # ========================================================
+    # ATUALIZAR PAINEL
+    # ========================================================
+
+    async def atualizar_painel(
+        self,
+        interaction
+    ):
+
+        self.atualizar_total_paginas()
+
+        if (
+            self.pagina
+            >= self.total_paginas
+        ):
+
+            self.pagina = max(
+                0,
+                self.total_paginas - 1
+            )
+
+        embed, total_paginas = (
+            criar_pagina_painel(
+                self.channel_id,
+                self.guild,
+                self.pagina,
+                self.tipo
+            )
+        )
+
+        self.total_paginas = (
+            total_paginas
+        )
+
+        self.atualizar_botoes()
+
+        await interaction.response.edit_message(
+            embed=embed,
+            view=self
+        )
+
+
+    # ========================================================
+    # BOTÃO ANTERIOR
+    # ========================================================
+
+    @discord.ui.button(
+        label="◀ Anterior",
+        style=discord.ButtonStyle.secondary
+    )
+    async def anterior(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        if self.pagina > 0:
+
+            self.pagina -= 1
+
+        await self.atualizar_painel(
+            interaction
+        )
+
+
+    # ========================================================
+    # BOTÃO PRÓXIMA
+    # ========================================================
+
+    @discord.ui.button(
+        label="Próxima ▶",
+        style=discord.ButtonStyle.secondary
+    )
+    async def proxima(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        if (
+            self.pagina
+            < self.total_paginas - 1
+        ):
+
+            self.pagina += 1
+
+        await self.atualizar_painel(
+            interaction
+        )
 
 
 # ============================================================
@@ -379,12 +753,33 @@ def registrar_comandos_painel(
     @bot.tree.command(
         name="painel",
         description=(
-            "Mostra jogadores e NPCs "
-            "ativos da mesa."
+            "Mostra as fichas ativas da mesa."
         )
     )
+    @app_commands.describe(
+        tipo=(
+            "Escolha quais fichas deseja visualizar"
+        )
+    )
+    @app_commands.choices(
+        tipo=[
+            app_commands.Choice(
+                name="📋 Ambos",
+                value="ambos"
+            ),
+            app_commands.Choice(
+                name="👤 Jogadores",
+                value="jogadores"
+            ),
+            app_commands.Choice(
+                name="👹 NPCs",
+                value="npcs"
+            )
+        ]
+    )
     async def painel(
-        interaction: discord.Interaction
+        interaction: discord.Interaction,
+        tipo: app_commands.Choice[str] = None
     ):
 
         if interaction.channel is None:
@@ -397,29 +792,90 @@ def registrar_comandos_painel(
 
             return
 
+        # ====================================================
+        # PADRÃO = AMBOS
+        # ====================================================
+
+        if tipo is None:
+
+            tipo_escolhido = (
+                "ambos"
+            )
+
+        else:
+
+            tipo_escolhido = (
+                tipo.value
+            )
+
         jogadores, npcs = (
             buscar_fichas_painel(
                 interaction.channel.id
             )
         )
 
-        if (
-            not jogadores
-            and not npcs
-        ):
+        itens = montar_itens_painel(
+            jogadores,
+            npcs,
+            tipo_escolhido
+        )
+
+        # ====================================================
+        # NENHUMA FICHA PARA O FILTRO
+        # ====================================================
+
+        if not itens:
+
+            if tipo_escolhido == "jogadores":
+
+                mensagem = (
+                    "👤 Nenhum jogador possui "
+                    "ficha nesta mesa."
+                )
+
+            elif tipo_escolhido == "npcs":
+
+                mensagem = (
+                    "👹 Não existem NPCs ativos "
+                    "nesta mesa."
+                )
+
+            else:
+
+                mensagem = (
+                    "📋 Esta mesa ainda não "
+                    "possui fichas."
+                )
 
             await interaction.response.send_message(
-                "📋 Esta mesa ainda não possui fichas.",
+                mensagem,
                 ephemeral=True
             )
 
             return
 
-        embed = criar_painel(
+        # ====================================================
+        # CRIAR PAINEL
+        # ====================================================
+
+        embed, total_paginas = (
+            criar_pagina_painel(
+                interaction.channel.id,
+                interaction.guild,
+                0,
+                tipo_escolhido
+            )
+        )
+
+        view = PainelView(
             interaction.channel.id,
-            interaction.guild
+            interaction.guild,
+            interaction.user.id,
+            tipo_escolhido,
+            pagina=0
         )
 
         await interaction.response.send_message(
-            embed=embed
+            embed=embed,
+            view=view
         )
