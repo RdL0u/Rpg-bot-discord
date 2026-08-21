@@ -225,11 +225,7 @@ def formatar_atributos(ficha):
         )
 
         linhas.append(
-            (
-                emoji,
-                nome,
-                valor
-            )
+            (emoji, nome, valor)
         )
 
     return linhas
@@ -253,11 +249,7 @@ def formatar_pericias(ficha):
         )
 
         linhas.append(
-            (
-                emoji,
-                nome,
-                valor
-            )
+            (emoji, nome, valor)
         )
 
     return linhas
@@ -267,40 +259,57 @@ def formatar_pericias(ficha):
 # LINHA DE ATRIBUTO
 # ============================================================
 
-def linha_atributo(
-    emoji,
-    nome,
-    valor
-):
+def linha_atributo(emoji, nome, valor):
 
-    return (
-        f"{emoji} {nome}: **{valor}**"
-    )
+    return f"{emoji} {nome}: **{valor}**"
 
 
 # ============================================================
 # LINHA DE PERÍCIA
 # ============================================================
 
-def linha_pericia(
-    emoji,
-    nome,
-    valor
-):
+def linha_pericia(emoji, nome, valor):
 
-    return (
-        f"{emoji} {nome}: **{valor}**"
-    )
+    return f"{emoji} {nome}: **{valor}**"
+
+
+# ============================================================
+# MONTAR DUAS COLUNAS
+# ============================================================
+
+def montar_duas_colunas(linhas):
+
+    if not linhas:
+        return "Nenhum"
+
+    metade = (len(linhas) + 1) // 2
+
+    coluna_1 = linhas[:metade]
+    coluna_2 = linhas[metade:]
+
+    resultado = []
+
+    for indice in range(metade):
+
+        esquerda = coluna_1[indice]
+
+        if indice < len(coluna_2):
+            direita = coluna_2[indice]
+        else:
+            direita = ""
+
+        resultado.append(
+            f"{esquerda:<32} {direita}"
+        )
+
+    return "\n".join(resultado)
 
 
 # ============================================================
 # CRIAR PÁGINA DE STATUS
 # ============================================================
 
-def criar_pagina_status(
-    ficha,
-    jogador=None
-):
+def criar_pagina_status(ficha, jogador=None):
 
     nome = ficha.get(
         "nome",
@@ -364,45 +373,21 @@ def criar_pagina_status(
         ficha
     )
 
-    metade = (
-        len(atributos) + 1
-    ) // 2
-
-    coluna_1 = atributos[:metade]
-    coluna_2 = atributos[metade:]
-
-    texto_1 = "\n".join(
+    linhas_atributos = [
         linha_atributo(
             emoji,
             nome_atributo,
             valor
         )
-        for emoji, nome_atributo, valor
-        in coluna_1
-    )
+        for emoji, nome_atributo, valor in atributos
+    ]
 
-    texto_2 = "\n".join(
-        linha_atributo(
-            emoji,
-            nome_atributo,
-            valor
-        )
-        for emoji, nome_atributo, valor
-        in coluna_2
-    )
-
-    # Campo esquerdo
     embed.add_field(
         name="📊 ATRIBUTOS",
-        value=texto_1,
-        inline=True
-    )
-
-    # Campo direito
-    embed.add_field(
-        name="\u200b",
-        value=texto_2,
-        inline=True
+        value=montar_duas_colunas(
+            linhas_atributos
+        ),
+        inline=False
     )
 
     # ========================================================
@@ -431,10 +416,7 @@ def criar_pagina_status(
 # CRIAR PÁGINA DE PERÍCIAS
 # ============================================================
 
-def criar_pagina_pericias(
-    ficha,
-    jogador=None
-):
+def criar_pagina_pericias(ficha, jogador=None):
 
     nome = ficha.get(
         "nome",
@@ -450,51 +432,21 @@ def criar_pagina_pericias(
         ficha
     )
 
-    metade = (
-        len(linhas) + 1
-    ) // 2
-
-    coluna_1 = linhas[:metade]
-    coluna_2 = linhas[metade:]
-
-    texto_1 = "\n".join(
+    linhas_pericias = [
         linha_pericia(
             emoji,
             nome_pericia,
             valor
         )
-        for emoji, nome_pericia, valor
-        in coluna_1
-    )
-
-    texto_2 = "\n".join(
-        linha_pericia(
-            emoji,
-            nome_pericia,
-            valor
-        )
-        for emoji, nome_pericia, valor
-        in coluna_2
-    )
-
-    # ========================================================
-    # COLUNA 1
-    # ========================================================
+        for emoji, nome_pericia, valor in linhas
+    ]
 
     embed.add_field(
         name="📚 PERÍCIAS",
-        value=texto_1,
-        inline=True
-    )
-
-    # ========================================================
-    # COLUNA 2
-    # ========================================================
-
-    embed.add_field(
-        name="\u200b",
-        value=texto_2,
-        inline=True
+        value=montar_duas_colunas(
+            linhas_pericias
+        ),
+        inline=False
     )
 
     # ========================================================
@@ -523,9 +475,7 @@ def criar_pagina_pericias(
 # VIEW DA FICHA
 # ============================================================
 
-class FichaView(
-    discord.ui.View
-):
+class FichaView(discord.ui.View):
 
     def __init__(
         self,
@@ -557,6 +507,8 @@ class FichaView(
         self.pericias_button.disabled = (
             self.pagina == 2
         )
+
+        self.editar_button.disabled = False
 
 
     # ========================================================
@@ -630,19 +582,13 @@ class FichaView(
         button: discord.ui.Button
     ):
 
-        # ====================================================
-        # IMPORTANTE
-        # A validação definitiva de permissão continua sendo
-        # feita pela função pode_alterar_ficha().
-        # ====================================================
-
         if not pode_alterar_ficha(
             interaction,
             self.ficha
         ):
 
             await interaction.response.send_message(
-                "❌ Você não pode editar esta ficha.",
+                "❌ Você não tem permissão para editar esta ficha.",
                 ephemeral=True
             )
 
@@ -650,8 +596,7 @@ class FichaView(
 
         await interaction.response.send_message(
             "✏️ **Menu de edição**\n\n"
-            "Nesta etapa estamos preparando "
-            "as opções de edição da ficha.",
+            "O sistema de edição está sendo preparado.",
             ephemeral=True
         )
 
