@@ -29,6 +29,1032 @@ from comando.permissoes import (
 
 
 # ============================================================
+# NOMES ALEATÓRIOS DE NPC
+# ============================================================
+
+NOMES_NPCS = [
+    "Goblin",
+    "Orc",
+    "Esqueleto",
+    "Bandido",
+    "Lobo",
+    "Zumbi",
+    "Slime",
+    "Aranha Gigante",
+    "Cultista",
+    "Guardião",
+    "Golem",
+    "Morcego Gigante",
+    "Troll",
+    "Ladrão",
+    "Cavaleiro Sombrio"
+]
+
+
+# ============================================================
+# NOMES COMPLETOS DOS ATRIBUTOS
+# ============================================================
+
+NOMES_ATRIBUTOS = {
+    "forca": "Força",
+    "destreza": "Destreza",
+    "vigor": "Vigor",
+    "inteligencia": "Inteligência",
+    "carisma": "Carisma",
+    "raciocinio": "Raciocínio"
+}
+
+
+# ============================================================
+# GRUPOS DOS ATRIBUTOS
+#
+# Modal do Discord aceita no máximo 5 campos.
+# Por isso os 6 atributos são divididos em 2 formulários.
+# ============================================================
+
+GRUPOS_ATRIBUTOS = [
+    [
+        "forca",
+        "destreza",
+        "vigor"
+    ],
+    [
+        "inteligencia",
+        "carisma",
+        "raciocinio"
+    ]
+]
+
+
+# ============================================================
+# GRUPOS DAS PERÍCIAS
+#
+# São 23 perícias.
+# Dividimos em grupos de até 5.
+# ============================================================
+
+GRUPOS_PERICIAS = [
+    ORDEM_PERICIAS[0:5],
+    ORDEM_PERICIAS[5:10],
+    ORDEM_PERICIAS[10:15],
+    ORDEM_PERICIAS[15:20],
+    ORDEM_PERICIAS[20:23]
+]
+
+
+# ============================================================
+# SESSÃO TEMPORÁRIA DE CRIAÇÃO DE NPC
+# ============================================================
+
+class SessaoCriacaoNPC:
+
+    def __init__(
+        self,
+        channel_id,
+        usuario_id
+    ):
+
+        self.channel_id = channel_id
+        self.usuario_id = usuario_id
+
+        self.nome = None
+
+        self.hp = None
+        self.mana = None
+
+        self.atributos = {}
+        self.pericias = {}
+
+        self.dados_basicos_aleatorios = False
+        self.atributos_aleatorios = False
+        self.pericias_aleatorias = False
+
+
+# ============================================================
+# VIEW BASE DA SESSÃO
+# ============================================================
+
+class ViewSessao(discord.ui.View):
+
+    def __init__(
+        self,
+        sessao,
+        timeout=300
+    ):
+
+        super().__init__(
+            timeout=timeout
+        )
+
+        self.sessao = sessao
+
+
+    async def interaction_check(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if (
+            interaction.user.id
+            != self.sessao.usuario_id
+        ):
+
+            await interaction.response.send_message(
+                "❌ Somente quem iniciou a criação "
+                "do NPC pode usar estes botões.",
+                ephemeral=True
+            )
+
+            return False
+
+        return True
+
+
+# ============================================================
+# FINALIZAR CRIAÇÃO DO NPC
+# ============================================================
+
+async def finalizar_criacao_npc(
+    interaction,
+    sessao
+):
+
+    # ========================================================
+    # VALIDAR DADOS BÁSICOS
+    # ========================================================
+
+    if not sessao.nome:
+
+        await interaction.response.send_message(
+            "❌ O NPC está sem nome.",
+            ephemeral=True
+        )
+
+        return
+
+    if (
+        sessao.hp is None
+        or sessao.hp <= 0
+    ):
+
+        await interaction.response.send_message(
+            "❌ O HP do NPC é inválido.",
+            ephemeral=True
+        )
+
+        return
+
+    if (
+        sessao.mana is None
+        or sessao.mana < 0
+    ):
+
+        await interaction.response.send_message(
+            "❌ A Mana do NPC é inválida.",
+            ephemeral=True
+        )
+
+        return
+
+    # ========================================================
+    # VALIDAR ATRIBUTOS
+    # ========================================================
+
+    for chave in ATRIBUTOS:
+
+        if chave not in sessao.atributos:
+
+            await interaction.response.send_message(
+                f"❌ O atributo `{chave}` não foi preenchido.",
+                ephemeral=True
+            )
+
+            return
+
+    # ========================================================
+    # VALIDAR PERÍCIAS
+    # ========================================================
+
+    for chave in ORDEM_PERICIAS:
+
+        if chave not in sessao.pericias:
+
+            await interaction.response.send_message(
+                f"❌ A perícia `{chave}` não foi preenchida.",
+                ephemeral=True
+            )
+
+            return
+
+    # ========================================================
+    # MESTRE
+    # ========================================================
+
+    garantir_mesa(
+        sessao.channel_id
+    )
+
+    mestre_id = obter_mestre(
+        sessao.channel_id
+    )
+
+    if mestre_id is None:
+
+        mestre_id = sessao.usuario_id
+
+        cursor.execute("""
+            UPDATE mesas
+            SET mestre_id = ?
+            WHERE channel_id = ?
+        """, (
+            mestre_id,
+            sessao.channel_id
+        ))
+
+        db.commit()
+
+    # ========================================================
+    # PREPARAR COLUNAS
+    # ========================================================
+
+    colunas = (
+        list(ATRIBUTOS.keys())
+        + ORDEM_PERICIAS
+    )
+
+    valores = (
+        [
+            sessao.atributos[chave]
+            for chave in ATRIBUTOS
+        ]
+        +
+        [
+            sessao.pericias[chave]
+            for chave in ORDEM_PERICIAS
+        ]
+    )
+
+    placeholders = ", ".join(
+        ["?"] * len(valores)
+    )
+
+    # ========================================================
+    # ALEATÓRIO
+    #
+    # Mantemos 1 se pelo menos alguma parte foi aleatória.
+    # ========================================================
+
+    aleatorio_valor = int(
+        sessao.dados_basicos_aleatorios
+        or sessao.atributos_aleatorios
+        or sessao.pericias_aleatorias
+    )
+
+    nome = sessao.nome[:50]
+
+    # ========================================================
+    # INSERIR NPC
+    # ========================================================
+
+    cursor.execute(
+        f"""
+        INSERT INTO fichas (
+            channel_id,
+            dono_id,
+            mestre_id,
+            tipo,
+            nome,
+
+            hp_atual,
+            hp_max,
+
+            mana_atual,
+            mana_max,
+
+            xp,
+
+            {", ".join(colunas)},
+
+            aleatorio
+        )
+        VALUES (
+            ?, NULL, ?, 'npc', ?,
+
+            ?, ?,
+
+            ?, ?,
+
+            0,
+
+            {placeholders},
+
+            ?
+        )
+        """,
+        [
+            sessao.channel_id,
+            mestre_id,
+            nome,
+
+            sessao.hp,
+            sessao.hp,
+
+            sessao.mana,
+            sessao.mana
+        ]
+        + valores
+        + [
+            aleatorio_valor
+        ]
+    )
+
+    db.commit()
+
+    # ========================================================
+    # RC
+    # ========================================================
+
+    rc = (
+        sessao.pericias["esquiva"]
+        + sessao.atributos["destreza"]
+        + 5
+    )
+
+    # ========================================================
+    # RESUMO
+    # ========================================================
+
+    dados_basicos_texto = (
+        "🎲 Aleatórios"
+        if sessao.dados_basicos_aleatorios
+        else "✏️ Personalizados"
+    )
+
+    atributos_texto = (
+        "🎲 Aleatórios"
+        if sessao.atributos_aleatorios
+        else "✏️ Personalizados"
+    )
+
+    pericias_texto = (
+        "🎲 Aleatórias"
+        if sessao.pericias_aleatorias
+        else "✏️ Personalizadas"
+    )
+
+    await interaction.response.send_message(
+        f"👹 NPC **{nome}** criado com sucesso!\n\n"
+        f"❤️ HP: **{sessao.hp}/{sessao.hp}**\n"
+        f"🔵 Mana: **{sessao.mana}/{sessao.mana}**\n"
+        f"⚡ RC: **{rc}**\n\n"
+        f"📋 Dados básicos: {dados_basicos_texto}\n"
+        f"📊 Atributos: {atributos_texto}\n"
+        f"📚 Perícias: {pericias_texto}",
+        ephemeral=True
+    )
+
+
+# ============================================================
+# ETAPA 1
+# NOME + HP + MANA ALEATÓRIOS?
+# ============================================================
+
+class ViewDadosBasicos(ViewSessao):
+
+    @discord.ui.button(
+        label="🎲 Sim, aleatórios",
+        style=discord.ButtonStyle.success
+    )
+    async def aleatorios(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        self.sessao.nome = random.choice(
+            NOMES_NPCS
+        )
+
+        self.sessao.hp = random.randint(
+            20,
+            150
+        )
+
+        self.sessao.mana = random.randint(
+            0,
+            100
+        )
+
+        self.sessao.dados_basicos_aleatorios = True
+
+        await interaction.response.send_message(
+            f"🎲 Dados básicos gerados:\n\n"
+            f"👹 Nome: **{self.sessao.nome}**\n"
+            f"❤️ HP: **{self.sessao.hp}**\n"
+            f"🔵 Mana: **{self.sessao.mana}**\n\n"
+            f"📊 Os **atributos** serão aleatórios?",
+            view=ViewEscolherAtributos(
+                self.sessao
+            ),
+            ephemeral=True
+        )
+
+
+    @discord.ui.button(
+        label="✏️ Não, preencher",
+        style=discord.ButtonStyle.primary
+    )
+    async def personalizados(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            ModalDadosBasicos(
+                self.sessao
+            )
+        )
+
+
+# ============================================================
+# MODAL — DADOS BÁSICOS
+# ============================================================
+
+class ModalDadosBasicos(
+    discord.ui.Modal,
+    title="Dados do NPC"
+):
+
+    def __init__(
+        self,
+        sessao
+    ):
+
+        super().__init__()
+
+        self.sessao = sessao
+
+        self.nome = discord.ui.TextInput(
+            label="Nome do NPC",
+            placeholder="Ex.: Cavaleiro Negro",
+            required=True,
+            max_length=50
+        )
+
+        self.hp = discord.ui.TextInput(
+            label="HP",
+            placeholder="Ex.: 50",
+            required=True,
+            max_length=7
+        )
+
+        self.mana = discord.ui.TextInput(
+            label="Mana",
+            placeholder="Ex.: 20",
+            required=True,
+            max_length=7
+        )
+
+        self.add_item(
+            self.nome
+        )
+
+        self.add_item(
+            self.hp
+        )
+
+        self.add_item(
+            self.mana
+        )
+
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if (
+            interaction.user.id
+            != self.sessao.usuario_id
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não pode preencher este formulário.",
+                ephemeral=True
+            )
+
+            return
+
+        try:
+
+            hp = int(
+                self.hp.value
+            )
+
+            mana = int(
+                self.mana.value
+            )
+
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ HP e Mana precisam ser números inteiros.",
+                ephemeral=True
+            )
+
+            return
+
+        if hp <= 0:
+
+            await interaction.response.send_message(
+                "❌ O HP precisa ser maior que 0.",
+                ephemeral=True
+            )
+
+            return
+
+        if mana < 0:
+
+            await interaction.response.send_message(
+                "❌ A Mana não pode ser negativa.",
+                ephemeral=True
+            )
+
+            return
+
+        self.sessao.nome = (
+            self.nome.value.strip()[:50]
+        )
+
+        self.sessao.hp = hp
+        self.sessao.mana = mana
+
+        self.sessao.dados_basicos_aleatorios = False
+
+        await interaction.response.send_message(
+            "✅ Dados básicos salvos.\n\n"
+            "📊 Os **atributos** serão aleatórios?",
+            view=ViewEscolherAtributos(
+                self.sessao
+            ),
+            ephemeral=True
+        )
+
+
+# ============================================================
+# ETAPA 2
+# ATRIBUTOS ALEATÓRIOS?
+# ============================================================
+
+class ViewEscolherAtributos(ViewSessao):
+
+    @discord.ui.button(
+        label="🎲 Sim, aleatórios",
+        style=discord.ButtonStyle.success
+    )
+    async def aleatorios(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        for chave in ATRIBUTOS:
+
+            self.sessao.atributos[
+                chave
+            ] = random.randint(
+                0,
+                5
+            )
+
+        self.sessao.atributos_aleatorios = True
+
+        await interaction.response.send_message(
+            "🎲 Atributos gerados com sucesso.\n\n"
+            "📚 As **perícias** serão aleatórias?",
+            view=ViewEscolherPericias(
+                self.sessao
+            ),
+            ephemeral=True
+        )
+
+
+    @discord.ui.button(
+        label="✏️ Não, preencher",
+        style=discord.ButtonStyle.primary
+    )
+    async def personalizados(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            ModalAtributos(
+                self.sessao,
+                grupo=0
+            )
+        )
+
+
+# ============================================================
+# MODAL — ATRIBUTOS
+# ============================================================
+
+class ModalAtributos(discord.ui.Modal):
+
+    def __init__(
+        self,
+        sessao,
+        grupo
+    ):
+
+        self.sessao = sessao
+        self.grupo = grupo
+
+        campos = GRUPOS_ATRIBUTOS[
+            grupo
+        ]
+
+        super().__init__(
+            title=(
+                f"Atributos "
+                f"{grupo + 1}/{len(GRUPOS_ATRIBUTOS)}"
+            )
+        )
+
+        self.inputs = {}
+
+        for chave in campos:
+
+            campo = discord.ui.TextInput(
+                label=NOMES_ATRIBUTOS[
+                    chave
+                ],
+                placeholder="Valor",
+                default=str(
+                    sessao.atributos.get(
+                        chave,
+                        0
+                    )
+                ),
+                required=True,
+                max_length=5
+            )
+
+            self.inputs[
+                chave
+            ] = campo
+
+            self.add_item(
+                campo
+            )
+
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if (
+            interaction.user.id
+            != self.sessao.usuario_id
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não pode preencher este formulário.",
+                ephemeral=True
+            )
+
+            return
+
+        valores = {}
+
+        try:
+
+            for chave, campo in self.inputs.items():
+
+                valor = int(
+                    campo.value
+                )
+
+                if valor < 0:
+                    raise ValueError
+
+                valores[
+                    chave
+                ] = valor
+
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ Todos os atributos precisam ser "
+                "números inteiros maiores ou iguais a 0.",
+                ephemeral=True
+            )
+
+            return
+
+        self.sessao.atributos.update(
+            valores
+        )
+
+        self.sessao.atributos_aleatorios = False
+
+        proximo = (
+            self.grupo + 1
+        )
+
+        if (
+            proximo
+            < len(GRUPOS_ATRIBUTOS)
+        ):
+
+            await interaction.response.send_message(
+                "✅ Primeira parte dos atributos salva.\n\n"
+                "Clique abaixo para continuar.",
+                view=ViewContinuarAtributos(
+                    self.sessao,
+                    proximo
+                ),
+                ephemeral=True
+            )
+
+            return
+
+        await interaction.response.send_message(
+            "✅ Todos os atributos foram salvos.\n\n"
+            "📚 As **perícias** serão aleatórias?",
+            view=ViewEscolherPericias(
+                self.sessao
+            ),
+            ephemeral=True
+        )
+
+
+# ============================================================
+# CONTINUAR ATRIBUTOS
+# ============================================================
+
+class ViewContinuarAtributos(ViewSessao):
+
+    def __init__(
+        self,
+        sessao,
+        grupo
+    ):
+
+        super().__init__(
+            sessao
+        )
+
+        self.grupo = grupo
+
+
+    @discord.ui.button(
+        label="➡️ Continuar atributos",
+        style=discord.ButtonStyle.primary
+    )
+    async def continuar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            ModalAtributos(
+                self.sessao,
+                self.grupo
+            )
+        )
+
+
+# ============================================================
+# ETAPA 3
+# PERÍCIAS ALEATÓRIAS?
+# ============================================================
+
+class ViewEscolherPericias(ViewSessao):
+
+    @discord.ui.button(
+        label="🎲 Sim, aleatórias",
+        style=discord.ButtonStyle.success
+    )
+    async def aleatorias(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        for chave in ORDEM_PERICIAS:
+
+            self.sessao.pericias[
+                chave
+            ] = random.randint(
+                0,
+                5
+            )
+
+        self.sessao.pericias_aleatorias = True
+
+        await finalizar_criacao_npc(
+            interaction,
+            self.sessao
+        )
+
+
+    @discord.ui.button(
+        label="✏️ Não, preencher",
+        style=discord.ButtonStyle.primary
+    )
+    async def personalizadas(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            ModalPericias(
+                self.sessao,
+                grupo=0
+            )
+        )
+
+
+# ============================================================
+# MODAL — PERÍCIAS
+# ============================================================
+
+class ModalPericias(discord.ui.Modal):
+
+    def __init__(
+        self,
+        sessao,
+        grupo
+    ):
+
+        self.sessao = sessao
+        self.grupo = grupo
+
+        campos = GRUPOS_PERICIAS[
+            grupo
+        ]
+
+        super().__init__(
+            title=(
+                f"Perícias "
+                f"{grupo + 1}/{len(GRUPOS_PERICIAS)}"
+            )
+        )
+
+        self.inputs = {}
+
+        for chave in campos:
+
+            emoji, nome = PERICIAS[
+                chave
+            ]
+
+            campo = discord.ui.TextInput(
+                label=nome[:45],
+                placeholder="Valor",
+                default=str(
+                    sessao.pericias.get(
+                        chave,
+                        0
+                    )
+                ),
+                required=True,
+                max_length=5
+            )
+
+            self.inputs[
+                chave
+            ] = campo
+
+            self.add_item(
+                campo
+            )
+
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if (
+            interaction.user.id
+            != self.sessao.usuario_id
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não pode preencher este formulário.",
+                ephemeral=True
+            )
+
+            return
+
+        valores = {}
+
+        try:
+
+            for chave, campo in self.inputs.items():
+
+                valor = int(
+                    campo.value
+                )
+
+                if valor < 0:
+                    raise ValueError
+
+                valores[
+                    chave
+                ] = valor
+
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ Todas as perícias precisam ser "
+                "números inteiros maiores ou iguais a 0.",
+                ephemeral=True
+            )
+
+            return
+
+        self.sessao.pericias.update(
+            valores
+        )
+
+        self.sessao.pericias_aleatorias = False
+
+        proximo = (
+            self.grupo + 1
+        )
+
+        if (
+            proximo
+            < len(GRUPOS_PERICIAS)
+        ):
+
+            await interaction.response.send_message(
+                f"✅ Perícias "
+                f"{self.grupo + 1}/{len(GRUPOS_PERICIAS)} "
+                f"salvas.\n\n"
+                f"Clique abaixo para continuar.",
+                view=ViewContinuarPericias(
+                    self.sessao,
+                    proximo
+                ),
+                ephemeral=True
+            )
+
+            return
+
+        await finalizar_criacao_npc(
+            interaction,
+            self.sessao
+        )
+
+
+# ============================================================
+# CONTINUAR PERÍCIAS
+# ============================================================
+
+class ViewContinuarPericias(ViewSessao):
+
+    def __init__(
+        self,
+        sessao,
+        grupo
+    ):
+
+        super().__init__(
+            sessao
+        )
+
+        self.grupo = grupo
+
+
+    @discord.ui.button(
+        label="➡️ Continuar perícias",
+        style=discord.ButtonStyle.primary
+    )
+    async def continuar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            ModalPericias(
+                self.sessao,
+                self.grupo
+            )
+        )
+
+
+# ============================================================
 # REGISTRAR COMANDOS DO MESTRE
 # ============================================================
 
@@ -116,7 +1142,8 @@ def registrar_comandos_mestre(bot):
         ):
 
             await interaction.response.send_message(
-                "❌ Somente o Mestre atual ou um administrador pode fazer isso.",
+                "❌ Somente o Mestre atual ou um administrador "
+                "pode fazer isso.",
                 ephemeral=True
             )
 
@@ -196,37 +1223,15 @@ def registrar_comandos_mestre(bot):
 
 
     # ========================================================
-    # CRIAR NPC
+    # CRIAR NPC — NOVO SISTEMA
     # ========================================================
 
     @bot.tree.command(
         name="criarnpc",
-        description="Cria um NPC."
-    )
-    @app_commands.describe(
-        aleatorio="NPC aleatório ou personalizado",
-        nome="Nome do NPC",
-        hp="HP do NPC",
-        mana="Mana do NPC"
-    )
-    @app_commands.choices(
-        aleatorio=[
-            app_commands.Choice(
-                name="Sim",
-                value="sim"
-            ),
-            app_commands.Choice(
-                name="Não",
-                value="nao"
-            )
-        ]
+        description="Inicia a criação guiada de um NPC."
     )
     async def criarnpc(
-        interaction: discord.Interaction,
-        aleatorio: app_commands.Choice[str],
-        nome: str = None,
-        hp: int = None,
-        mana: int = None
+        interaction: discord.Interaction
     ):
 
         garantir_mesa(
@@ -239,209 +1244,25 @@ def registrar_comandos_mestre(bot):
         ):
 
             await interaction.response.send_message(
-                "❌ Somente o Mestre pode criar NPCs.",
+                "❌ Somente o Mestre ou um administrador "
+                "pode criar NPCs.",
                 ephemeral=True
             )
 
             return
 
-        if aleatorio.value == "sim":
-
-            nomes = [
-                "Goblin",
-                "Orc",
-                "Esqueleto",
-                "Bandido",
-                "Lobo",
-                "Zumbi",
-                "Slime",
-                "Aranha Gigante",
-                "Cultista",
-                "Guardião",
-                "Golem",
-                "Morcego Gigante",
-                "Troll",
-                "Ladrão",
-                "Cavaleiro Sombrio"
-            ]
-
-            nome = random.choice(
-                nomes
-            )
-
-            hp = random.randint(
-                20,
-                150
-            )
-
-            mana = random.randint(
-                0,
-                100
-            )
-
-            atributos = {}
-
-            for chave in ATRIBUTOS:
-
-                atributos[chave] = random.randint(
-                    0,
-                    5
-                )
-
-            pericias = {}
-
-            for chave in PERICIAS:
-
-                pericias[chave] = random.randint(
-                    0,
-                    5
-                )
-
-            aleatorio_valor = 1
-
-        else:
-
-            if not nome:
-
-                await interaction.response.send_message(
-                    "❌ Informe o nome do NPC.",
-                    ephemeral=True
-                )
-
-                return
-
-            if hp is None:
-
-                await interaction.response.send_message(
-                    "❌ Informe o HP do NPC.",
-                    ephemeral=True
-                )
-
-                return
-
-            if mana is None:
-
-                await interaction.response.send_message(
-                    "❌ Informe a Mana do NPC.",
-                    ephemeral=True
-                )
-
-                return
-
-            if hp <= 0 or mana < 0:
-
-                await interaction.response.send_message(
-                    "❌ Valores inválidos.",
-                    ephemeral=True
-                )
-
-                return
-
-            atributos = {
-                chave: 0
-                for chave in ATRIBUTOS
-            }
-
-            pericias = {
-                chave: 0
-                for chave in PERICIAS
-            }
-
-            aleatorio_valor = 0
-
-        nome = nome[:50]
-
-        mestre_id = obter_mestre(
-            interaction.channel.id
-        )
-
-        if mestre_id is None:
-
-            mestre_id = interaction.user.id
-
-            cursor.execute("""
-                UPDATE mesas
-                SET mestre_id = ?
-                WHERE channel_id = ?
-            """, (
-                mestre_id,
-                interaction.channel.id
-            ))
-
-        colunas = (
-            list(ATRIBUTOS.keys())
-            + ORDEM_PERICIAS
-        )
-
-        valores = (
-            [
-                atributos[chave]
-                for chave in ATRIBUTOS
-            ]
-            +
-            [
-                pericias[chave]
-                for chave in ORDEM_PERICIAS
-            ]
-        )
-
-        placeholders = ", ".join(
-            ["?"] * len(valores)
-        )
-
-        cursor.execute(
-            f"""
-            INSERT INTO fichas (
-                channel_id,
-                dono_id,
-                mestre_id,
-                tipo,
-                nome,
-                hp_atual,
-                hp_max,
-                mana_atual,
-                mana_max,
-                xp,
-                {", ".join(colunas)},
-                aleatorio
-            )
-            VALUES (
-                ?, NULL, ?, 'npc', ?,
-                ?, ?, ?, ?, 0,
-                {placeholders},
-                ?
-            )
-            """,
-            [
-                interaction.channel.id,
-                mestre_id,
-                nome,
-                hp,
-                hp,
-                mana,
-                mana
-            ]
-            + valores
-            + [
-                aleatorio_valor
-            ]
-        )
-
-        db.commit()
-
-        rc = (
-            pericias["esquiva"]
-            + atributos["destreza"]
-            + 5
+        sessao = SessaoCriacaoNPC(
+            interaction.channel.id,
+            interaction.user.id
         )
 
         await interaction.response.send_message(
-            f"👹 NPC **{nome}** criado!\n\n"
-            f"❤️ HP: **{hp}/{hp}**\n"
-            f"🔵 Mana: **{mana}/{mana}**\n"
-            f"⚡ RC: **{rc}**\n\n"
-            f"🎲 Atributos e perícias "
-            f"{'foram gerados aleatoriamente' if aleatorio_valor else 'começaram em 0'}."
+            "👹 **Criação de NPC**\n\n"
+            "🎲 O **nome, HP e Mana** serão aleatórios?",
+            view=ViewDadosBasicos(
+                sessao
+            ),
+            ephemeral=True
         )
 
 
@@ -492,7 +1313,8 @@ def registrar_comandos_mestre(bot):
 
         await interaction.response.send_message(
             f"👹 **NPCs da mesa — "
-            f"{len(resultados)} encontrados**"
+            f"{len(resultados)} encontrados**",
+            ephemeral=True
         )
 
         for dados in resultados:
@@ -507,7 +1329,8 @@ def registrar_comandos_mestre(bot):
                 ),
                 view=FichaView(
                     f
-                )
+                ),
+                ephemeral=True
             )
 
 
