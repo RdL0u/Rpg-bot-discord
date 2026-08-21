@@ -253,7 +253,6 @@ def formatar_pericias(ficha):
         )
 
         # Nome recebe largura fixa.
-        # Isso evita que os valores fiquem desalinhados.
         linhas.append(
             f"{emoji} {nome:<20} **{valor:>2}**"
         )
@@ -338,7 +337,6 @@ def criar_pagina_status(ficha, jogador=None):
     coluna_1 = atributos[:metade]
     coluna_2 = atributos[metade:]
 
-    # Usamos bloco de código para garantir alinhamento visual.
     valor_coluna_1 = (
         "```text\n"
         + "\n".join(coluna_1)
@@ -463,6 +461,98 @@ def criar_pagina_pericias(ficha, jogador=None):
 
 
 # ============================================================
+# MENU DE EDIÇÃO — ETAPA 1.2
+# ============================================================
+
+class MenuEdicao(discord.ui.Select):
+
+    def __init__(self, ficha, jogador=None):
+
+        self.ficha = ficha
+        self.jogador = jogador
+
+        opcoes = [
+            discord.SelectOption(
+                label="Atributos",
+                description="Editar os atributos da ficha.",
+                emoji="📊",
+                value="atributos"
+            ),
+            discord.SelectOption(
+                label="Perícias",
+                description="Editar as perícias da ficha.",
+                emoji="📚",
+                value="pericias"
+            ),
+            discord.SelectOption(
+                label="HP / Mana",
+                description="Editar HP e Mana da ficha.",
+                emoji="❤️",
+                value="recursos"
+            ),
+            discord.SelectOption(
+                label="XP",
+                description="Editar a experiência da ficha.",
+                emoji="✨",
+                value="xp"
+            )
+        ]
+
+        super().__init__(
+            placeholder="✏️ Escolha o que deseja editar...",
+            min_values=1,
+            max_values=1,
+            options=opcoes
+        )
+
+
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        escolha = self.values[0]
+
+        nomes = {
+            "atributos": "📊 Atributos",
+            "pericias": "📚 Perícias",
+            "recursos": "❤️ HP / Mana",
+            "xp": "✨ XP"
+        }
+
+        nome_escolhido = nomes.get(
+            escolha,
+            "Opção"
+        )
+
+        await interaction.response.send_message(
+            f"✏️ Você selecionou **{nome_escolhido}**.\n\n"
+            f"Essa parte será implementada na próxima etapa.",
+            ephemeral=True
+        )
+
+
+# ============================================================
+# VIEW DO MENU DE EDIÇÃO
+# ============================================================
+
+class MenuEdicaoView(discord.ui.View):
+
+    def __init__(self, ficha, jogador=None):
+
+        super().__init__(
+            timeout=120
+        )
+
+        self.add_item(
+            MenuEdicao(
+                ficha,
+                jogador
+            )
+        )
+
+
+# ============================================================
 # VIEW DA FICHA
 # ============================================================
 
@@ -551,6 +641,52 @@ class FichaView(discord.ui.View):
                 self.jogador
             ),
             view=self
+        )
+
+
+    # ========================================================
+    # BOTÃO EDITAR
+    # ========================================================
+
+    @discord.ui.button(
+        label="✏️ Editar",
+        style=discord.ButtonStyle.primary,
+        row=1
+    )
+    async def editar_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        # ----------------------------------------------------
+        # VERIFICAÇÃO DE SEGURANÇA
+        # ----------------------------------------------------
+
+        if not pode_alterar_ficha(
+            interaction,
+            self.ficha
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não tem permissão para editar esta ficha.",
+                ephemeral=True
+            )
+
+            return
+
+        # ----------------------------------------------------
+        # ABRIR MENU
+        # ----------------------------------------------------
+
+        await interaction.response.send_message(
+            "✏️ **Menu de edição**\n\n"
+            "Escolha abaixo o que deseja editar:",
+            view=MenuEdicaoView(
+                self.ficha,
+                self.jogador
+            ),
+            ephemeral=True
         )
 
 
