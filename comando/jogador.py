@@ -51,6 +51,398 @@ def eh_mestre(interaction):
 
 
 # ============================================================
+# BUSCAR FICHA PELO ID NO CANAL
+# ============================================================
+
+def buscar_ficha_por_id(
+    channel_id,
+    ficha_id
+):
+
+    cursor.execute("""
+        SELECT *
+        FROM fichas
+        WHERE id = ?
+        AND channel_id = ?
+        LIMIT 1
+    """, (
+        ficha_id,
+        channel_id
+    ))
+
+    return cursor.fetchone()
+
+
+# ============================================================
+# MODAL — APLICAR DANO
+# ============================================================
+
+class DanoModal(
+    discord.ui.Modal
+):
+
+    def __init__(
+        self,
+        ficha_id,
+        autor_id
+    ):
+
+        super().__init__(
+            title="Aplicar dano"
+        )
+
+        self.ficha_id = ficha_id
+        self.autor_id = autor_id
+
+        self.valor = discord.ui.TextInput(
+            label="Quantidade de dano",
+            placeholder="Digite o valor do dano",
+            required=True,
+            max_length=10
+        )
+
+        self.add_item(
+            self.valor
+        )
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        # ====================================================
+        # SOMENTE QUEM INICIOU PODE CONTINUAR
+        # ====================================================
+
+        if (
+            interaction.user.id
+            != self.autor_id
+        ):
+
+            await interaction.response.send_message(
+                "❌ Somente quem iniciou a ação "
+                "pode aplicar o dano.",
+                ephemeral=True
+            )
+
+            return
+
+        # ====================================================
+        # VALIDAR VALOR
+        # ====================================================
+
+        try:
+
+            valor = int(
+                self.valor.value
+            )
+
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ O dano precisa ser um número inteiro.",
+                ephemeral=True
+            )
+
+            return
+
+        if valor <= 0:
+
+            await interaction.response.send_message(
+                "❌ O dano precisa ser maior que 0.",
+                ephemeral=True
+            )
+
+            return
+
+        # ====================================================
+        # BUSCAR FICHA NOVAMENTE
+        # ====================================================
+
+        dados = buscar_ficha_por_id(
+            interaction.channel.id,
+            self.ficha_id
+        )
+
+        if dados is None:
+
+            await interaction.response.send_message(
+                "❌ Essa ficha não existe mais.",
+                ephemeral=True
+            )
+
+            return
+
+        f = transformar_ficha(
+            dados
+        )
+
+        # ====================================================
+        # CALCULAR DANO
+        # ====================================================
+
+        hp_anterior = f[
+            "hp_atual"
+        ]
+
+        novo_hp = max(
+            0,
+            hp_anterior - valor
+        )
+
+        dano_real = (
+            hp_anterior - novo_hp
+        )
+
+        # ====================================================
+        # NPC DERROTADO
+        # ====================================================
+
+        if (
+            f["tipo"] == "npc"
+            and novo_hp <= 0
+        ):
+
+            cursor.execute("""
+                DELETE FROM fichas
+                WHERE id = ?
+                AND channel_id = ?
+                AND tipo = 'npc'
+            """, (
+                f["id"],
+                interaction.channel.id
+            ))
+
+            db.commit()
+
+            await interaction.response.send_message(
+                f"💥 **{f['nome']} #{f['id']}** recebeu "
+                f"**{dano_real} de dano**!\n\n"
+                f"❤️ HP: "
+                f"**{hp_anterior}/{f['hp_max']}** "
+                f"→ "
+                f"**0/{f['hp_max']}**\n\n"
+                f"💀 **DERROTADO**\n"
+                f"🗑️ O NPC foi removido da mesa."
+            )
+
+            return
+
+        # ====================================================
+        # JOGADOR OU NPC QUE SOBREVIVEU
+        # ====================================================
+
+        cursor.execute("""
+            UPDATE fichas
+            SET hp_atual = ?
+            WHERE id = ?
+            AND channel_id = ?
+        """, (
+            novo_hp,
+            f["id"],
+            interaction.channel.id
+        ))
+
+        db.commit()
+
+        estado = estado_hp(
+            novo_hp,
+            f["hp_max"]
+        )
+
+        # ====================================================
+        # NOME VISUAL
+        # ====================================================
+
+        if f["tipo"] == "npc":
+
+            nome_visual = (
+                f"{f['nome']} #{f['id']}"
+            )
+
+        else:
+
+            nome_visual = f[
+                "nome"
+            ]
+
+        # ====================================================
+        # RESPOSTA
+        # ====================================================
+
+        await interaction.response.send_message(
+            f"💥 **{nome_visual}** recebeu "
+            f"**{dano_real} de dano**!\n\n"
+            f"❤️ HP: "
+            f"**{hp_anterior}/{f['hp_max']}** "
+            f"→ "
+            f"**{novo_hp}/{f['hp_max']}**\n"
+            f"Estado: {estado}"
+        )
+
+
+# ============================================================
+# SELECT — ESCOLHER ALVO DO DANO
+# ============================================================
+
+class DanoAlvoSelect(
+    discord.ui.Select
+):
+
+    def __init__(
+        self,
+        interaction
+    ):
+
+        self.autor_id = (
+            interaction.user.id
+        )
+
+        cursor.execute("""
+            SELECT
+                id,
+                nome,
+                tipo
+            FROM fichas
+            WHERE channel_id = ?
+            ORDER BY
+                tipo,
+                nome COLLATE NOCASE,
+                id
+            LIMIT 25
+        """, (
+            interaction.channel.id,
+        ))
+
+        resultados = cursor.fetchall()
+
+        opcoes = []
+
+        for (
+            ficha_id,
+            nome,
+            tipo
+        ) in resultados:
+
+            # ================================================
+            # NPC
+            # ================================================
+
+            if tipo == "npc":
+
+                label = (
+                    f"{nome} #{ficha_id}"
+                )
+
+                emoji = "👹"
+
+                descricao = (
+                    f"NPC • ID {ficha_id}"
+                )
+
+            # ================================================
+            # JOGADOR
+            # ================================================
+
+            else:
+
+                label = nome
+
+                emoji = "👤"
+
+                descricao = "Jogador"
+
+            opcoes.append(
+                discord.SelectOption(
+                    label=label[:100],
+                    value=str(
+                        ficha_id
+                    ),
+                    emoji=emoji,
+                    description=descricao[:100]
+                )
+            )
+
+        super().__init__(
+            placeholder="Escolha quem receberá o dano...",
+            min_values=1,
+            max_values=1,
+            options=opcoes
+        )
+
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        # ====================================================
+        # SOMENTE QUEM ABRIU O MENU
+        # ====================================================
+
+        if (
+            interaction.user.id
+            != self.autor_id
+        ):
+
+            await interaction.response.send_message(
+                "❌ Somente quem iniciou a ação "
+                "pode escolher o alvo.",
+                ephemeral=True
+            )
+
+            return
+
+        ficha_id = int(
+            self.values[0]
+        )
+
+        dados = buscar_ficha_por_id(
+            interaction.channel.id,
+            ficha_id
+        )
+
+        if dados is None:
+
+            await interaction.response.send_message(
+                "❌ Essa ficha não existe mais.",
+                ephemeral=True
+            )
+
+            return
+
+        await interaction.response.send_modal(
+            DanoModal(
+                ficha_id,
+                self.autor_id
+            )
+        )
+
+
+# ============================================================
+# VIEW — ESCOLHER ALVO DO DANO
+# ============================================================
+
+class DanoAlvoView(
+    discord.ui.View
+):
+
+    def __init__(
+        self,
+        interaction
+    ):
+
+        super().__init__(
+            timeout=120
+        )
+
+        self.add_item(
+            DanoAlvoSelect(
+                interaction
+            )
+        )
+
+
+# ============================================================
 # REGISTRAR COMANDOS DE JOGADOR
 # ============================================================
 
@@ -163,8 +555,10 @@ def registrar_comandos_jogador(bot):
 
         await interaction.response.send_message(
             f"📜 Ficha de **{nome}** criada!\n\n"
-            f"❤️ HP: **{hp}/{hp}** • {estado_inicial_hp}\n"
-            f"🔵 Mana: **{mana}/{mana}** • {estado_inicial_mana}\n"
+            f"❤️ HP: **{hp}/{hp}** • "
+            f"{estado_inicial_hp}\n"
+            f"🔵 Mana: **{mana}/{mana}** • "
+            f"{estado_inicial_mana}\n"
             f"✨ XP: **0**\n"
             f"⚡ RC: **5**"
         )
@@ -559,7 +953,10 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        if hp <= 0 or mana < 0:
+        if (
+            hp <= 0
+            or mana < 0
+        ):
 
             await interaction.response.send_message(
                 "❌ Valores inválidos.",
@@ -598,7 +995,8 @@ def registrar_comandos_jogador(bot):
         await interaction.response.send_message(
             f"⚙️ Ficha de **{f['nome']}** atualizada!\n\n"
             f"❤️ HP: **{hp}/{hp}** • {estado_atual_hp}\n"
-            f"🔵 Mana: **{mana}/{mana}** • {estado_atual_mana}"
+            f"🔵 Mana: **{mana}/{mana}** • "
+            f"{estado_atual_mana}"
         )
 
     # ========================================================
@@ -631,15 +1029,12 @@ def registrar_comandos_jogador(bot):
             dados
         )
 
-        cursor.execute(
-            """
+        cursor.execute("""
             DELETE FROM fichas
             WHERE id = ?
-            """,
-            (
-                f["id"],
-            )
-        )
+        """, (
+            f["id"],
+        ))
 
         db.commit()
 
@@ -649,92 +1044,46 @@ def registrar_comandos_jogador(bot):
 
     # ========================================================
     # DANO
-    # ETAPA 4.3
+    # ETAPA 4.4
     # ========================================================
 
     @bot.tree.command(
         name="dano",
-        description="Aplica dano a um jogador."
-    )
-    @app_commands.describe(
-        jogador="Jogador que receberá o dano",
-        valor="Quantidade de dano"
+        description="Escolhe uma ficha para receber dano."
     )
     async def dano(
-        interaction: discord.Interaction,
-        jogador: discord.Member,
-        valor: int
+        interaction: discord.Interaction
     ):
 
-        dados = buscar_ficha_jogador(
-            interaction.channel.id,
-            jogador.id
-        )
-
-        if dados is None:
-
-            await interaction.response.send_message(
-                "❌ Ficha não encontrada.",
-                ephemeral=True
-            )
-
-            return
-
-        if valor <= 0:
-
-            await interaction.response.send_message(
-                "❌ O dano precisa ser maior que 0.",
-                ephemeral=True
-            )
-
-            return
-
-        f = transformar_ficha(
-            dados
-        )
-
-        hp_anterior = f[
-            "hp_atual"
-        ]
-
-        novo_hp = max(
-            0,
-            hp_anterior - valor
-        )
-
-        dano_real = (
-            hp_anterior - novo_hp
-        )
-
         cursor.execute("""
-            UPDATE fichas
-            SET hp_atual = ?
-            WHERE id = ?
+            SELECT COUNT(*)
+            FROM fichas
+            WHERE channel_id = ?
         """, (
-            novo_hp,
-            f["id"]
+            interaction.channel.id,
         ))
 
-        db.commit()
+        quantidade = cursor.fetchone()[0]
 
-        estado = estado_hp(
-            novo_hp,
-            f["hp_max"]
-        )
+        if quantidade <= 0:
+
+            await interaction.response.send_message(
+                "❌ Não existem fichas neste canal.",
+                ephemeral=True
+            )
+
+            return
 
         await interaction.response.send_message(
-            f"💥 **{f['nome']}** recebeu "
-            f"**{dano_real} de dano**!\n\n"
-            f"❤️ HP: "
-            f"**{hp_anterior}/{f['hp_max']}** "
-            f"→ "
-            f"**{novo_hp}/{f['hp_max']}**\n"
-            f"Estado: {estado}"
+            "💥 **Escolha quem receberá o dano:**",
+            view=DanoAlvoView(
+                interaction
+            ),
+            ephemeral=True
         )
 
     # ========================================================
     # CURA
-    # ETAPA 4.3
     # ========================================================
 
     @bot.tree.command(
@@ -819,7 +1168,6 @@ def registrar_comandos_jogador(bot):
 
     # ========================================================
     # GASTAR MANA
-    # ETAPA 4.3
     # ========================================================
 
     @bot.tree.command(
@@ -914,7 +1262,6 @@ def registrar_comandos_jogador(bot):
 
     # ========================================================
     # RECUPERAR MANA
-    # ETAPA 4.3
     # ========================================================
 
     @bot.tree.command(
@@ -1034,7 +1381,8 @@ def registrar_comandos_jogador(bot):
         )
 
         if (
-            f["dono_id"] != interaction.user.id
+            f["dono_id"]
+            != interaction.user.id
             and not eh_admin(
                 interaction
             )
