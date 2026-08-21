@@ -510,6 +510,41 @@ class FichaView(discord.ui.View):
         )
 
 
+    # ========================================================
+    # BOTÃO EDITAR
+    # ========================================================
+
+    @discord.ui.button(
+        label="✏️ Editar",
+        style=discord.ButtonStyle.primary,
+        row=1
+    )
+    async def editar_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        if not pode_alterar_ficha(
+            interaction,
+            self.ficha
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não tem permissão para editar esta ficha.",
+                ephemeral=True
+            )
+
+            return
+
+        await interaction.response.send_message(
+            "✏️ **Modo de edição**\n\n"
+            "O menu de edição será disponibilizado "
+            "na próxima etapa.",
+            ephemeral=True
+        )
+
+
 # ============================================================
 # VERIFICAR SE PODE ALTERAR FICHA
 # ============================================================
