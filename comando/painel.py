@@ -9,6 +9,8 @@ from fichas import (
     transformar_ficha,
     estado_hp,
     estado_mana,
+    criar_pagina_status,
+    FichaView,
 )
 
 
@@ -61,6 +63,37 @@ def buscar_fichas_painel(channel_id):
             )
 
     return jogadores, npcs
+
+
+# ============================================================
+# BUSCAR FICHA POR ID
+# ============================================================
+
+def buscar_ficha_por_id(
+    channel_id,
+    ficha_id
+):
+
+    cursor.execute("""
+        SELECT *
+        FROM fichas
+        WHERE id = ?
+        AND channel_id = ?
+        LIMIT 1
+    """, (
+        ficha_id,
+        channel_id
+    ))
+
+    resultado = cursor.fetchone()
+
+    if resultado is None:
+
+        return None
+
+    return transformar_ficha(
+        resultado
+    )
 
 
 # ============================================================
@@ -294,6 +327,57 @@ def calcular_total_paginas(
 
 
 # ============================================================
+# OBTER ITENS DE UMA PÁGINA
+# ============================================================
+
+def obter_itens_pagina(
+    channel_id,
+    tipo,
+    pagina
+):
+
+    jogadores, npcs = (
+        buscar_fichas_painel(
+            channel_id
+        )
+    )
+
+    itens = montar_itens_painel(
+        jogadores,
+        npcs,
+        tipo
+    )
+
+    total_paginas = (
+        calcular_total_paginas(
+            len(itens)
+        )
+    )
+
+    if pagina < 0:
+
+        pagina = 0
+
+    if pagina >= total_paginas:
+
+        pagina = (
+            total_paginas - 1
+        )
+
+    inicio = (
+        pagina
+        * ITENS_POR_PAGINA
+    )
+
+    fim = (
+        inicio
+        + ITENS_POR_PAGINA
+    )
+
+    return itens[inicio:fim]
+
+
+# ============================================================
 # TÍTULO DO PAINEL
 # ============================================================
 
@@ -425,7 +509,6 @@ def criar_pagina_painel(
     )
 
     jogadores_pagina = []
-
     npcs_pagina = []
 
     for tipo_ficha, ficha in itens_pagina:
@@ -538,6 +621,161 @@ def criar_pagina_painel(
 
 
 # ============================================================
+# SELECT — ABRIR FICHA COMPLETA
+# ============================================================
+
+class PainelFichaSelect(
+    discord.ui.Select
+):
+
+    def __init__(
+        self,
+        painel_view
+    ):
+
+        self.painel_view = (
+            painel_view
+        )
+
+        itens_pagina = (
+            obter_itens_pagina(
+                painel_view.channel_id,
+                painel_view.tipo,
+                painel_view.pagina
+            )
+        )
+
+        opcoes = []
+
+        for tipo_ficha, ficha in itens_pagina:
+
+            ficha_id = ficha.get(
+                "id"
+            )
+
+            nome = ficha.get(
+                "nome",
+                "Sem nome"
+            )
+
+            if tipo_ficha == "npc":
+
+                label = (
+                    f"{nome} #{ficha_id}"
+                )
+
+                descricao = (
+                    f"NPC • ID {ficha_id}"
+                )
+
+                emoji = "👹"
+
+            else:
+
+                label = nome
+
+                descricao = "Jogador"
+
+                emoji = "👤"
+
+            opcoes.append(
+                discord.SelectOption(
+                    label=label[:100],
+                    value=str(
+                        ficha_id
+                    ),
+                    description=descricao[:100],
+                    emoji=emoji
+                )
+            )
+
+        super().__init__(
+            placeholder="📜 Ver ficha completa...",
+            min_values=1,
+            max_values=1,
+            options=opcoes,
+            row=0
+        )
+
+
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        ficha_id = int(
+            self.values[0]
+        )
+
+        ficha = buscar_ficha_por_id(
+            self.painel_view.channel_id,
+            ficha_id
+        )
+
+        if ficha is None:
+
+            await interaction.response.send_message(
+                "❌ Essa ficha não existe mais.",
+                ephemeral=True
+            )
+
+            return
+
+        # ====================================================
+        # JOGADOR
+        # ====================================================
+
+        if ficha["tipo"] == "jogador":
+
+            jogador = None
+
+            dono_id = ficha.get(
+                "dono_id"
+            )
+
+            if (
+                interaction.guild is not None
+                and dono_id is not None
+            ):
+
+                jogador = (
+                    interaction.guild.get_member(
+                        dono_id
+                    )
+                )
+
+            embed = criar_pagina_status(
+                ficha,
+                jogador
+            )
+
+            view = FichaView(
+                ficha,
+                jogador
+            )
+
+        # ====================================================
+        # NPC
+        # ====================================================
+
+        else:
+
+            embed = criar_pagina_status(
+                ficha
+            )
+
+            view = FichaView(
+                ficha
+            )
+
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True
+        )
+
+
+# ============================================================
 # VIEW DO PAINEL
 # ============================================================
 
@@ -578,7 +816,7 @@ class PainelView(
 
         self.atualizar_total_paginas()
 
-        self.atualizar_botoes()
+        self.reconstruir_componentes()
 
 
     # ========================================================
@@ -609,20 +847,76 @@ class PainelView(
 
 
     # ========================================================
-    # ATUALIZAR BOTÕES
+    # RECONSTRUIR COMPONENTES
     # ========================================================
 
-    def atualizar_botoes(
+    def reconstruir_componentes(
         self
     ):
 
-        self.anterior.disabled = (
-            self.pagina <= 0
+        self.clear_items()
+
+        itens_pagina = (
+            obter_itens_pagina(
+                self.channel_id,
+                self.tipo,
+                self.pagina
+            )
         )
 
-        self.proxima.disabled = (
-            self.pagina
-            >= self.total_paginas - 1
+        # ====================================================
+        # SELECT DE FICHAS
+        # ====================================================
+
+        if itens_pagina:
+
+            self.add_item(
+                PainelFichaSelect(
+                    self
+                )
+            )
+
+        # ====================================================
+        # BOTÃO ANTERIOR
+        # ====================================================
+
+        botao_anterior = discord.ui.Button(
+            label="◀ Anterior",
+            style=discord.ButtonStyle.secondary,
+            disabled=(
+                self.pagina <= 0
+            ),
+            row=1
+        )
+
+        botao_anterior.callback = (
+            self.callback_anterior
+        )
+
+        self.add_item(
+            botao_anterior
+        )
+
+        # ====================================================
+        # BOTÃO PRÓXIMA
+        # ====================================================
+
+        botao_proxima = discord.ui.Button(
+            label="Próxima ▶",
+            style=discord.ButtonStyle.secondary,
+            disabled=(
+                self.pagina
+                >= self.total_paginas - 1
+            ),
+            row=1
+        )
+
+        botao_proxima.callback = (
+            self.callback_proxima
+        )
+
+        self.add_item(
+            botao_proxima
         )
 
 
@@ -642,7 +936,7 @@ class PainelView(
 
             await interaction.response.send_message(
                 "❌ Somente quem abriu o painel "
-                "pode usar estes botões.",
+                "pode usar estes controles.",
                 ephemeral=True
             )
 
@@ -685,7 +979,7 @@ class PainelView(
             total_paginas
         )
 
-        self.atualizar_botoes()
+        self.reconstruir_componentes()
 
         await interaction.response.edit_message(
             embed=embed,
@@ -694,17 +988,12 @@ class PainelView(
 
 
     # ========================================================
-    # BOTÃO ANTERIOR
+    # ANTERIOR
     # ========================================================
 
-    @discord.ui.button(
-        label="◀ Anterior",
-        style=discord.ButtonStyle.secondary
-    )
-    async def anterior(
+    async def callback_anterior(
         self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
+        interaction: discord.Interaction
     ):
 
         if self.pagina > 0:
@@ -717,17 +1006,12 @@ class PainelView(
 
 
     # ========================================================
-    # BOTÃO PRÓXIMA
+    # PRÓXIMA
     # ========================================================
 
-    @discord.ui.button(
-        label="Próxima ▶",
-        style=discord.ButtonStyle.secondary
-    )
-    async def proxima(
+    async def callback_proxima(
         self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
+        interaction: discord.Interaction
     ):
 
         if (
@@ -821,7 +1105,7 @@ def registrar_comandos_painel(
         )
 
         # ====================================================
-        # NENHUMA FICHA PARA O FILTRO
+        # NENHUMA FICHA
         # ====================================================
 
         if not itens:
