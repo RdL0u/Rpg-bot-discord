@@ -16,7 +16,6 @@ ORDEM_PERICIAS
 
 def buscar_ficha_jogador(channel_id, user_id):
 
-```
 cursor.execute("""
     SELECT *
     FROM fichas
@@ -30,7 +29,6 @@ cursor.execute("""
 ))
 
 return cursor.fetchone()
-```
 
 # ============================================================
 
@@ -40,7 +38,6 @@ return cursor.fetchone()
 
 def buscar_ficha(ficha_id):
 
-```
 cursor.execute("""
     SELECT *
     FROM fichas
@@ -48,7 +45,6 @@ cursor.execute("""
 """, (ficha_id,))
 
 return cursor.fetchone()
-```
 
 # ============================================================
 
@@ -58,7 +54,6 @@ return cursor.fetchone()
 
 def transformar_ficha(dados):
 
-```
 if dados is None:
     return None
 
@@ -120,7 +115,6 @@ for indice, coluna in enumerate(colunas):
         ficha[coluna] = dados[indice]
 
 return ficha
-```
 
 # ============================================================
 
@@ -130,7 +124,6 @@ return ficha
 
 def atualizar_hp(ficha_id, novo_hp):
 
-```
 cursor.execute("""
     UPDATE fichas
     SET hp_atual = ?
@@ -141,7 +134,6 @@ cursor.execute("""
 ))
 
 db.commit()
-```
 
 # ============================================================
 
@@ -151,7 +143,6 @@ db.commit()
 
 def atualizar_mana(ficha_id, nova_mana):
 
-```
 cursor.execute("""
     UPDATE fichas
     SET mana_atual = ?
@@ -162,7 +153,6 @@ cursor.execute("""
 ))
 
 db.commit()
-```
 
 # ============================================================
 
@@ -172,7 +162,6 @@ db.commit()
 
 def adicionar_xp(ficha_id, valor):
 
-```
 cursor.execute("""
     UPDATE fichas
     SET xp = xp + ?
@@ -183,7 +172,6 @@ cursor.execute("""
 ))
 
 db.commit()
-```
 
 # ============================================================
 
@@ -193,14 +181,12 @@ db.commit()
 
 def deletar_ficha(ficha_id):
 
-```
 cursor.execute("""
     DELETE FROM fichas
     WHERE id = ?
 """, (ficha_id,))
 
 db.commit()
-```
 
 # ============================================================
 
@@ -210,13 +196,11 @@ db.commit()
 
 def calcular_rc(ficha):
 
-```
 return (
     ficha.get("esquiva", 0)
     + ficha.get("destreza", 0)
     \+ 5
 )
-```
 
 # ============================================================
 
@@ -226,12 +210,10 @@ return (
 
 def estado_recurso(atual, maximo):
 
-```
 if maximo <= 0:
     return "0/0"
 
 return f"{atual}/{maximo}"
-```
 
 # ============================================================
 
@@ -241,7 +223,6 @@ return f"{atual}/{maximo}"
 
 def formatar_atributos(ficha):
 
-```
 linhas = []
 
 for chave, dados in ATRIBUTOS.items():
@@ -258,7 +239,6 @@ for chave, dados in ATRIBUTOS.items():
     )
 
 return linhas
-```
 
 # ============================================================
 
@@ -268,7 +248,6 @@ return linhas
 
 def formatar_pericias(ficha):
 
-```
 linhas = []
 
 for chave in ORDEM_PERICIAS:
@@ -285,7 +264,6 @@ for chave in ORDEM_PERICIAS:
     )
 
 return linhas
-```
 
 # ============================================================
 
@@ -295,7 +273,6 @@ return linhas
 
 def criar_pagina_status(ficha, jogador=None):
 
-```
 nome = ficha.get(
     "nome",
     "Sem nome"
@@ -405,7 +382,6 @@ else:
     )
 
 return embed
-```
 
 # ============================================================
 
@@ -415,7 +391,6 @@ return embed
 
 def criar_pagina_pericias(ficha, jogador=None):
 
-```
 nome = ficha.get(
     "nome",
     "Sem nome"
@@ -481,7 +456,6 @@ else:
     )
 
 return embed
-```
 
 # ============================================================
 
@@ -491,7 +465,6 @@ return embed
 
 class FichaView(discord.ui.View):
 
-```
 def __init__(
     self,
     ficha,
@@ -573,7 +546,6 @@ async def pericias_button(
         ),
         view=self
     )
-```
 
 # ============================================================
 
@@ -586,7 +558,6 @@ interaction,
 ficha
 ):
 
-```
 if ficha is None:
     return False
 
