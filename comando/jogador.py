@@ -19,28 +19,10 @@ from fichas import (
 
 from config import ATRIBUTOS, PERICIAS
 
-
-# ============================================================
-# PERMISSÕES
-# ============================================================
-
-def eh_admin(interaction):
-
-    if interaction.guild is None:
-        return False
-
-    return interaction.user.guild_permissions.administrator
-
-
-def eh_mestre(interaction):
-
-    if interaction.channel is None:
-        return False
-
-    return (
-        obter_mestre(interaction.channel.id)
-        == interaction.user.id
-    )
+from comando.permissoes import (
+    eh_admin,
+    eh_mestre
+)
 
 
 # ============================================================
