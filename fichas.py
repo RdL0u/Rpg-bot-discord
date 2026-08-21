@@ -54,9 +54,6 @@ def transformar_ficha(dados):
     if dados is None:
         return None
 
-    # IMPORTANTE:
-    # A ordem deve ser EXATAMENTE a mesma da tabela fichas.
-
     colunas = [
         "id",
         "channel_id",
@@ -227,9 +224,8 @@ def formatar_atributos(ficha):
             0
         )
 
-        # Espaçamento fixo para manter os valores alinhados.
         linhas.append(
-            f"{emoji} {nome:<4} **{valor:>2}**"
+            (emoji, nome, valor)
         )
 
     return linhas
@@ -252,12 +248,35 @@ def formatar_pericias(ficha):
             0
         )
 
-        # Nome recebe largura fixa.
         linhas.append(
-            f"{emoji} {nome:<20} **{valor:>2}**"
+            (emoji, nome, valor)
         )
 
     return linhas
+
+
+# ============================================================
+# CRIAR LINHA DE ATRIBUTO
+# ============================================================
+
+def linha_atributo(emoji, nome, valor):
+
+    return (
+        f"{emoji} {nome} "
+        f"**{valor}**"
+    )
+
+
+# ============================================================
+# CRIAR LINHA DE PERÍCIA
+# ============================================================
+
+def linha_pericia(emoji, nome, valor):
+
+    return (
+        f"{emoji} {nome} "
+        f"**{valor}**"
+    )
 
 
 # ============================================================
@@ -309,16 +328,14 @@ def criar_pagina_status(ficha, jogador=None):
     # STATUS
     # ========================================================
 
-    status = (
-        f"❤️ HP       : **{hp_atual}/{hp_max}**\n"
-        f"🔵 Mana     : **{mana_atual}/{mana_max}**\n"
-        f"✨ XP       : **{xp}**\n"
-        f"⚡ RC       : **{rc}**"
-    )
-
     embed.add_field(
         name="❤️ STATUS",
-        value=status,
+        value=(
+            f"❤️ HP       : **{hp_atual}/{hp_max}**\n"
+            f"🔵 Mana     : **{mana_atual}/{mana_max}**\n"
+            f"✨ XP       : **{xp}**\n"
+            f"⚡ RC       : **{rc}**"
+        ),
         inline=False
     )
 
@@ -337,27 +354,35 @@ def criar_pagina_status(ficha, jogador=None):
     coluna_1 = atributos[:metade]
     coluna_2 = atributos[metade:]
 
-    valor_coluna_1 = (
-        "```text\n"
-        + "\n".join(coluna_1)
-        + "\n```"
+    texto_1 = "\n".join(
+        linha_atributo(
+            emoji,
+            nome_atributo,
+            valor
+        )
+        for emoji, nome_atributo, valor
+        in coluna_1
     )
 
-    valor_coluna_2 = (
-        "```text\n"
-        + "\n".join(coluna_2)
-        + "\n```"
+    texto_2 = "\n".join(
+        linha_atributo(
+            emoji,
+            nome_atributo,
+            valor
+        )
+        for emoji, nome_atributo, valor
+        in coluna_2
     )
 
     embed.add_field(
         name="📊 ATRIBUTOS",
-        value=valor_coluna_1,
+        value=texto_1 or "Nenhum",
         inline=True
     )
 
     embed.add_field(
-        name=" ",
-        value=valor_coluna_2,
+        name="\u200b",
+        value=texto_2 or "Nenhum",
         inline=True
     )
 
@@ -403,10 +428,6 @@ def criar_pagina_pericias(ficha, jogador=None):
         ficha
     )
 
-    # ========================================================
-    # DUAS COLUNAS
-    # ========================================================
-
     metade = (
         len(linhas) + 1
     ) // 2
@@ -414,27 +435,35 @@ def criar_pagina_pericias(ficha, jogador=None):
     coluna_1 = linhas[:metade]
     coluna_2 = linhas[metade:]
 
-    valor_coluna_1 = (
-        "```text\n"
-        + "\n".join(coluna_1)
-        + "\n```"
+    texto_1 = "\n".join(
+        linha_pericia(
+            emoji,
+            nome_pericia,
+            valor
+        )
+        for emoji, nome_pericia, valor
+        in coluna_1
     )
 
-    valor_coluna_2 = (
-        "```text\n"
-        + "\n".join(coluna_2)
-        + "\n```"
+    texto_2 = "\n".join(
+        linha_pericia(
+            emoji,
+            nome_pericia,
+            valor
+        )
+        for emoji, nome_pericia, valor
+        in coluna_2
     )
 
     embed.add_field(
         name="📚 PERÍCIAS",
-        value=valor_coluna_1,
+        value=texto_1 or "Nenhuma",
         inline=True
     )
 
     embed.add_field(
-        name=" ",
-        value=valor_coluna_2,
+        name="\u200b",
+        value=texto_2 or "Nenhuma",
         inline=True
     )
 
@@ -458,98 +487,6 @@ def criar_pagina_pericias(ficha, jogador=None):
         )
 
     return embed
-
-
-# ============================================================
-# MENU DE EDIÇÃO — ETAPA 1.2
-# ============================================================
-
-class MenuEdicao(discord.ui.Select):
-
-    def __init__(self, ficha, jogador=None):
-
-        self.ficha = ficha
-        self.jogador = jogador
-
-        opcoes = [
-            discord.SelectOption(
-                label="Atributos",
-                description="Editar os atributos da ficha.",
-                emoji="📊",
-                value="atributos"
-            ),
-            discord.SelectOption(
-                label="Perícias",
-                description="Editar as perícias da ficha.",
-                emoji="📚",
-                value="pericias"
-            ),
-            discord.SelectOption(
-                label="HP / Mana",
-                description="Editar HP e Mana da ficha.",
-                emoji="❤️",
-                value="recursos"
-            ),
-            discord.SelectOption(
-                label="XP",
-                description="Editar a experiência da ficha.",
-                emoji="✨",
-                value="xp"
-            )
-        ]
-
-        super().__init__(
-            placeholder="✏️ Escolha o que deseja editar...",
-            min_values=1,
-            max_values=1,
-            options=opcoes
-        )
-
-
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
-
-        escolha = self.values[0]
-
-        nomes = {
-            "atributos": "📊 Atributos",
-            "pericias": "📚 Perícias",
-            "recursos": "❤️ HP / Mana",
-            "xp": "✨ XP"
-        }
-
-        nome_escolhido = nomes.get(
-            escolha,
-            "Opção"
-        )
-
-        await interaction.response.send_message(
-            f"✏️ Você selecionou **{nome_escolhido}**.\n\n"
-            f"Essa parte será implementada na próxima etapa.",
-            ephemeral=True
-        )
-
-
-# ============================================================
-# VIEW DO MENU DE EDIÇÃO
-# ============================================================
-
-class MenuEdicaoView(discord.ui.View):
-
-    def __init__(self, ficha, jogador=None):
-
-        super().__init__(
-            timeout=120
-        )
-
-        self.add_item(
-            MenuEdicao(
-                ficha,
-                jogador
-            )
-        )
 
 
 # ============================================================
@@ -641,52 +578,6 @@ class FichaView(discord.ui.View):
                 self.jogador
             ),
             view=self
-        )
-
-
-    # ========================================================
-    # BOTÃO EDITAR
-    # ========================================================
-
-    @discord.ui.button(
-        label="✏️ Editar",
-        style=discord.ButtonStyle.primary,
-        row=1
-    )
-    async def editar_button(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-
-        # ----------------------------------------------------
-        # VERIFICAÇÃO DE SEGURANÇA
-        # ----------------------------------------------------
-
-        if not pode_alterar_ficha(
-            interaction,
-            self.ficha
-        ):
-
-            await interaction.response.send_message(
-                "❌ Você não tem permissão para editar esta ficha.",
-                ephemeral=True
-            )
-
-            return
-
-        # ----------------------------------------------------
-        # ABRIR MENU
-        # ----------------------------------------------------
-
-        await interaction.response.send_message(
-            "✏️ **Menu de edição**\n\n"
-            "Escolha abaixo o que deseja editar:",
-            view=MenuEdicaoView(
-                self.ficha,
-                self.jogador
-            ),
-            ephemeral=True
         )
 
 
