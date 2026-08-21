@@ -254,7 +254,7 @@ for chave, dados in ATRIBUTOS.items():
     )
 
     linhas.append(
-        f"{emoji} **{nome}: {valor}**"
+        f"{emoji} {nome}: **{valor}**"
     )
 
 return linhas
@@ -330,6 +330,17 @@ rc = calcular_rc(
     ficha
 )
 
+atributos = formatar_atributos(
+    ficha
+)
+
+metade = (
+    len(atributos) + 1
+) // 2
+
+coluna_1 = atributos[:metade]
+coluna_2 = atributos[metade:]
+
 embed = discord.Embed(
     title=f"📜 FICHA DE {nome.upper()}",
     color=discord.Color.dark_red()
@@ -351,40 +362,26 @@ embed.add_field(
 )
 
 # ========================================================
-# ATRIBUTOS — DUAS COLUNAS
+# ATRIBUTOS - COLUNA 1
 # ========================================================
-
-atributos = []
-
-for chave in ATRIBUTOS:
-
-    emoji, nome_atributo = ATRIBUTOS[chave]
-
-    valor = ficha.get(
-        chave,
-        0
-    )
-
-    atributos.append(
-        f"{emoji} **{nome_atributo}: {valor}**"
-    )
-
-# Divide os 6 atributos em 2 colunas,
-# mantendo a ordem original.
-metade = len(atributos) // 2
-
-coluna_1 = atributos[:metade]
-coluna_2 = atributos[metade:]
 
 embed.add_field(
     name="📊 ATRIBUTOS",
-    value="\n".join(coluna_1),
+    value="\n".join(
+        coluna_1
+    ),
     inline=True
 )
 
+# ========================================================
+# ATRIBUTOS - COLUNA 2
+# ========================================================
+
 embed.add_field(
-    name=" ",
-    value="\n".join(coluna_2),
+    name="ㅤ",
+    value="\n".join(
+        coluna_2
+    ),
     inline=True
 )
 
@@ -433,16 +430,16 @@ linhas = formatar_pericias(
     ficha
 )
 
-# ========================================================
-# DUAS COLUNAS
-# ========================================================
-
 metade = (
     len(linhas) + 1
 ) // 2
 
 coluna_1 = linhas[:metade]
 coluna_2 = linhas[metade:]
+
+# ========================================================
+# PERÍCIAS - COLUNA 1
+# ========================================================
 
 embed.add_field(
     name="📚 PERÍCIAS",
@@ -452,8 +449,12 @@ embed.add_field(
     inline=True
 )
 
+# ========================================================
+# PERÍCIAS - COLUNA 2
+# ========================================================
+
 embed.add_field(
-    name=" ",
+    name="ㅤ",
     value="\n".join(
         coluna_2
     ) if coluna_2 else "Nenhuma",
@@ -507,7 +508,6 @@ def __init__(
 
     self.atualizar_botoes()
 
-
 # ========================================================
 # ATUALIZAR BOTÕES
 # ========================================================
@@ -521,7 +521,6 @@ def atualizar_botoes(self):
     self.pericias_button.disabled = (
         self.pagina == 2
     )
-
 
 # ========================================================
 # BOTÃO STATUS
@@ -548,7 +547,6 @@ async def status_button(
         ),
         view=self
     )
-
 
 # ========================================================
 # BOTÃO PERÍCIAS
