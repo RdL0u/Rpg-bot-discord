@@ -73,15 +73,38 @@ NOMES_ATRIBUTOS = {
 
 
 # ============================================================
-# PERÍCIAS DIVIDIDAS EM 2 CAMPOS NO MESMO MODAL
+# ATRIBUTOS DIVIDIDOS EM FORMULÁRIOS
 # ============================================================
 
-PERICIAS_PARTE_1 = ORDEM_PERICIAS[:12]
-PERICIAS_PARTE_2 = ORDEM_PERICIAS[12:]
+GRUPOS_ATRIBUTOS = [
+    [
+        "forca",
+        "destreza",
+        "vigor"
+    ],
+    [
+        "inteligencia",
+        "carisma",
+        "raciocinio"
+    ]
+]
 
 
 # ============================================================
-# FUNÇÕES AUXILIARES — NPCS
+# PERÍCIAS DIVIDIDAS EM FORMULÁRIOS
+# ============================================================
+
+GRUPOS_PERICIAS = [
+    ORDEM_PERICIAS[0:5],
+    ORDEM_PERICIAS[5:10],
+    ORDEM_PERICIAS[10:15],
+    ORDEM_PERICIAS[15:20],
+    ORDEM_PERICIAS[20:23]
+]
+
+
+# ============================================================
+# FUNÇÕES AUXILIARES DOS NPCS
 # ============================================================
 
 def buscar_npcs_canal(channel_id):
@@ -124,6 +147,8 @@ def nome_visual_npc(
     nome
 ):
 
+    # O #ID é apenas visual.
+    # O nome salvo no banco não é alterado.
     return f"{nome} #{npc_id}"
 
 
@@ -157,123 +182,6 @@ def obter_pagina(
     return lista[
         inicio:fim
     ]
-
-
-# ============================================================
-# MONTAR TEXTO DOS ATRIBUTOS
-# ============================================================
-
-def montar_texto_atributos(
-    sessao
-):
-
-    linhas = []
-
-    for chave in ATRIBUTOS:
-
-        nome = NOMES_ATRIBUTOS[
-            chave
-        ]
-
-        valor = sessao.atributos.get(
-            chave,
-            0
-        )
-
-        linhas.append(
-            f"{nome}: {valor}"
-        )
-
-    return "\n".join(
-        linhas
-    )
-
-
-# ============================================================
-# MONTAR TEXTO DAS PERÍCIAS
-# ============================================================
-
-def montar_texto_pericias(
-    sessao,
-    chaves
-):
-
-    linhas = []
-
-    for chave in chaves:
-
-        emoji, nome = PERICIAS[
-            chave
-        ]
-
-        valor = sessao.pericias.get(
-            chave,
-            0
-        )
-
-        linhas.append(
-            f"{nome}: {valor}"
-        )
-
-    return "\n".join(
-        linhas
-    )
-
-
-# ============================================================
-# INTERPRETAR CAMPO MULTILINHA
-# ============================================================
-
-def interpretar_lista_valores(
-    texto,
-    chaves
-):
-
-    linhas = [
-        linha.strip()
-        for linha in texto.splitlines()
-        if linha.strip()
-    ]
-
-    if len(linhas) != len(chaves):
-        return None
-
-    resultado = {}
-
-    for chave, linha in zip(
-        chaves,
-        linhas
-    ):
-
-        if ":" in linha:
-
-            valor_texto = linha.rsplit(
-                ":",
-                1
-            )[1].strip()
-
-        else:
-
-            valor_texto = linha.strip()
-
-        try:
-
-            valor = int(
-                valor_texto
-            )
-
-        except ValueError:
-
-            return None
-
-        if valor < 0:
-            return None
-
-        resultado[
-            chave
-        ] = valor
-
-    return resultado
 
 
 # ============================================================
@@ -347,7 +255,7 @@ class ViewSessao(
 
 
 # ============================================================
-# VIEW BASE PARA AÇÕES DE UM USUÁRIO
+# VIEW BASE DE USUÁRIO
 # ============================================================
 
 class ViewUsuario(
@@ -465,7 +373,7 @@ async def finalizar_criacao_npc(
             return
 
     # ========================================================
-    # GARANTIR MESTRE
+    # GARANTIR MESA
     # ========================================================
 
     garantir_mesa(
@@ -492,7 +400,7 @@ async def finalizar_criacao_npc(
         db.commit()
 
     # ========================================================
-    # PREPARAR COLUNAS
+    # COLUNAS
     # ========================================================
 
     colunas = (
@@ -589,7 +497,7 @@ async def finalizar_criacao_npc(
     npc_id = cursor.lastrowid
 
     # ========================================================
-    # CALCULAR RC
+    # RC
     # ========================================================
 
     rc = (
@@ -601,10 +509,6 @@ async def finalizar_criacao_npc(
         ]
         + 5
     )
-
-    # ========================================================
-    # RESUMO
-    # ========================================================
 
     dados_basicos_texto = (
         "🎲 Aleatórios"
@@ -625,7 +529,8 @@ async def finalizar_criacao_npc(
     )
 
     await interaction.response.send_message(
-        f"👹 NPC **{nome} #{npc_id}** criado com sucesso!\n\n"
+        f"👹 NPC **{nome_visual_npc(npc_id, nome)}** "
+        f"criado com sucesso!\n\n"
         f"❤️ HP: **{sessao.hp}/{sessao.hp}**\n"
         f"🔵 Mana: **{sessao.mana}/{sessao.mana}**\n"
         f"⚡ RC: **{rc}**\n\n"
@@ -675,7 +580,7 @@ class ViewDadosBasicos(
             f"👹 Nome: **{self.sessao.nome}**\n"
             f"❤️ HP: **{self.sessao.hp}**\n"
             f"🔵 Mana: **{self.sessao.mana}**\n\n"
-            f"📊 Os **atributos** serão aleatórios?",
+            "📊 Os **atributos** serão aleatórios?",
             view=ViewEscolherAtributos(
                 self.sessao
             ),
@@ -884,52 +789,67 @@ class ViewEscolherAtributos(
     ):
 
         await interaction.response.send_modal(
-            ModalAtributosCompacto(
-                self.sessao
+            ModalAtributos(
+                self.sessao,
+                grupo=0
             )
         )
 
 
 # ============================================================
-# MODAL COMPACTO — ATRIBUTOS
+# MODAL — ATRIBUTOS
 # ============================================================
 
-class ModalAtributosCompacto(
+class ModalAtributos(
     discord.ui.Modal
 ):
 
     def __init__(
         self,
-        sessao
+        sessao,
+        grupo
     ):
 
-        super().__init__(
-            title="Atributos do NPC"
-        )
-
         self.sessao = sessao
+        self.grupo = grupo
 
-        self.valores = discord.ui.TextInput(
-            label="Atributos",
-            style=discord.TextStyle.paragraph,
-            default=montar_texto_atributos(
-                sessao
-            ),
-            placeholder=(
-                "Força: 0\n"
-                "Destreza: 0\n"
-                "Vigor: 0\n"
-                "Inteligência: 0\n"
-                "Carisma: 0\n"
-                "Raciocínio: 0"
-            ),
-            required=True,
-            max_length=1000
+        campos = GRUPOS_ATRIBUTOS[
+            grupo
+        ]
+
+        super().__init__(
+            title=(
+                f"Atributos "
+                f"{grupo + 1}/{len(GRUPOS_ATRIBUTOS)}"
+            )
         )
 
-        self.add_item(
-            self.valores
-        )
+        self.inputs = {}
+
+        for chave in campos:
+
+            campo = discord.ui.TextInput(
+                label=NOMES_ATRIBUTOS[
+                    chave
+                ],
+                placeholder="Valor",
+                default=str(
+                    sessao.atributos.get(
+                        chave,
+                        0
+                    )
+                ),
+                required=True,
+                max_length=5
+            )
+
+            self.inputs[
+                chave
+            ] = campo
+
+            self.add_item(
+                campo
+            )
 
 
     async def on_submit(
@@ -949,31 +869,60 @@ class ModalAtributosCompacto(
 
             return
 
-        valores = interpretar_lista_valores(
-            self.valores.value,
-            list(
-                ATRIBUTOS.keys()
-            )
-        )
+        valores = {}
 
-        if valores is None:
+        try:
+
+            for chave, campo in self.inputs.items():
+
+                valor = int(
+                    campo.value
+                )
+
+                if valor < 0:
+                    raise ValueError
+
+                valores[
+                    chave
+                ] = valor
+
+        except ValueError:
 
             await interaction.response.send_message(
-                "❌ Não consegui interpretar os atributos.\n\n"
-                "Mantenha as **6 linhas** e altere somente "
-                "os números depois dos `:`.\n\n"
-                "Exemplo:\n"
-                "`Força: 3`\n"
-                "`Destreza: 2`\n"
-                "`Vigor: 4`",
+                "❌ Todos os atributos precisam ser "
+                "números inteiros maiores ou iguais a 0.",
                 ephemeral=True
             )
 
             return
 
-        self.sessao.atributos = valores
+        self.sessao.atributos.update(
+            valores
+        )
 
         self.sessao.atributos_aleatorios = False
+
+        proximo = (
+            self.grupo
+            + 1
+        )
+
+        if (
+            proximo
+            < len(GRUPOS_ATRIBUTOS)
+        ):
+
+            await interaction.response.send_message(
+                "✅ Parte dos atributos salva.\n\n"
+                "Clique abaixo para continuar.",
+                view=ViewContinuarAtributos(
+                    self.sessao,
+                    proximo
+                ),
+                ephemeral=True
+            )
+
+            return
 
         await interaction.response.send_message(
             "✅ Todos os atributos foram salvos.\n\n"
@@ -982,6 +931,45 @@ class ModalAtributosCompacto(
                 self.sessao
             ),
             ephemeral=True
+        )
+
+
+# ============================================================
+# CONTINUAR ATRIBUTOS
+# ============================================================
+
+class ViewContinuarAtributos(
+    ViewSessao
+):
+
+    def __init__(
+        self,
+        sessao,
+        grupo
+    ):
+
+        super().__init__(
+            sessao
+        )
+
+        self.grupo = grupo
+
+
+    @discord.ui.button(
+        label="➡️ Continuar atributos",
+        style=discord.ButtonStyle.primary
+    )
+    async def continuar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            ModalAtributos(
+                self.sessao,
+                self.grupo
+            )
         )
 
 
@@ -1031,60 +1019,69 @@ class ViewEscolherPericias(
     ):
 
         await interaction.response.send_modal(
-            ModalPericiasCompacto(
-                self.sessao
+            ModalPericias(
+                self.sessao,
+                grupo=0
             )
         )
 
 
 # ============================================================
-# MODAL COMPACTO — PERÍCIAS
+# MODAL — PERÍCIAS
 # ============================================================
 
-class ModalPericiasCompacto(
+class ModalPericias(
     discord.ui.Modal
 ):
 
     def __init__(
         self,
-        sessao
+        sessao,
+        grupo
     ):
 
-        super().__init__(
-            title="Perícias do NPC"
-        )
-
         self.sessao = sessao
+        self.grupo = grupo
 
-        self.parte_1 = discord.ui.TextInput(
-            label="Perícias — Parte 1",
-            style=discord.TextStyle.paragraph,
-            default=montar_texto_pericias(
-                sessao,
-                PERICIAS_PARTE_1
-            ),
-            required=True,
-            max_length=2000
+        campos = GRUPOS_PERICIAS[
+            grupo
+        ]
+
+        super().__init__(
+            title=(
+                f"Perícias "
+                f"{grupo + 1}/{len(GRUPOS_PERICIAS)}"
+            )
         )
 
-        self.parte_2 = discord.ui.TextInput(
-            label="Perícias — Parte 2",
-            style=discord.TextStyle.paragraph,
-            default=montar_texto_pericias(
-                sessao,
-                PERICIAS_PARTE_2
-            ),
-            required=True,
-            max_length=2000
-        )
+        self.inputs = {}
 
-        self.add_item(
-            self.parte_1
-        )
+        for chave in campos:
 
-        self.add_item(
-            self.parte_2
-        )
+            emoji, nome = PERICIAS[
+                chave
+            ]
+
+            campo = discord.ui.TextInput(
+                label=nome[:45],
+                placeholder="Valor",
+                default=str(
+                    sessao.pericias.get(
+                        chave,
+                        0
+                    )
+                ),
+                required=True,
+                max_length=5
+            )
+
+            self.inputs[
+                chave
+            ] = campo
+
+            self.add_item(
+                campo
+            )
 
 
     async def on_submit(
@@ -1104,40 +1101,62 @@ class ModalPericiasCompacto(
 
             return
 
-        valores_1 = interpretar_lista_valores(
-            self.parte_1.value,
-            PERICIAS_PARTE_1
-        )
+        valores = {}
 
-        valores_2 = interpretar_lista_valores(
-            self.parte_2.value,
-            PERICIAS_PARTE_2
-        )
+        try:
 
-        if (
-            valores_1 is None
-            or valores_2 is None
-        ):
+            for chave, campo in self.inputs.items():
+
+                valor = int(
+                    campo.value
+                )
+
+                if valor < 0:
+                    raise ValueError
+
+                valores[
+                    chave
+                ] = valor
+
+        except ValueError:
 
             await interaction.response.send_message(
-                "❌ Não consegui interpretar as perícias.\n\n"
-                "Mantenha todas as linhas e altere somente "
-                "os números depois dos `:`.\n\n"
-                "Exemplo:\n"
-                "`Acadêmicos: 2`\n"
-                "`Idiomas: 0`\n"
-                "`Ofícios: 3`",
+                "❌ Todas as perícias precisam ser "
+                "números inteiros maiores ou iguais a 0.",
                 ephemeral=True
             )
 
             return
 
-        self.sessao.pericias = {
-            **valores_1,
-            **valores_2
-        }
+        self.sessao.pericias.update(
+            valores
+        )
 
         self.sessao.pericias_aleatorias = False
+
+        proximo = (
+            self.grupo
+            + 1
+        )
+
+        if (
+            proximo
+            < len(GRUPOS_PERICIAS)
+        ):
+
+            await interaction.response.send_message(
+                f"✅ Perícias "
+                f"{self.grupo + 1}/{len(GRUPOS_PERICIAS)} "
+                f"salvas.\n\n"
+                "Clique abaixo para continuar.",
+                view=ViewContinuarPericias(
+                    self.sessao,
+                    proximo
+                ),
+                ephemeral=True
+            )
+
+            return
 
         await finalizar_criacao_npc(
             interaction,
@@ -1146,7 +1165,47 @@ class ModalPericiasCompacto(
 
 
 # ============================================================
+# CONTINUAR PERÍCIAS
+# ============================================================
+
+class ViewContinuarPericias(
+    ViewSessao
+):
+
+    def __init__(
+        self,
+        sessao,
+        grupo
+    ):
+
+        super().__init__(
+            sessao
+        )
+
+        self.grupo = grupo
+
+
+    @discord.ui.button(
+        label="➡️ Continuar perícias",
+        style=discord.ButtonStyle.primary
+    )
+    async def continuar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            ModalPericias(
+                self.sessao,
+                self.grupo
+            )
+        )
+
+
+# ============================================================
 # SELECT — VISUALIZAR NPC
+# ETAPA 3.6 + 3.7
 # ============================================================
 
 class SelectVisualizarNPC(
@@ -1252,6 +1311,7 @@ class SelectVisualizarNPC(
 
 # ============================================================
 # VIEW — LISTA PAGINADA DE NPCS
+# ETAPA 3.6
 # ============================================================
 
 class ViewListaNPCs(
@@ -1266,7 +1326,6 @@ class ViewListaNPCs(
     ):
 
         self.channel_id = channel_id
-
         self.npcs = npcs
 
         self.pagina = 0
@@ -1491,7 +1550,6 @@ class ViewApagarUmNPC(
     ):
 
         self.channel_id = channel_id
-
         self.npcs = npcs
 
         self.pagina = 0
@@ -1671,13 +1729,16 @@ class SelectApagarVariosNPCs(
 
         ids_pagina = {
             npc_id
-            for npc_id, nome in pagina_npcs
+            for npc_id, nome
+            in pagina_npcs
         }
 
+        # Remove apenas as escolhas antigas da página atual.
         self.view_pai.selecionados.difference_update(
             ids_pagina
         )
 
+        # Adiciona a seleção atual.
         for valor in self.values:
 
             self.view_pai.selecionados.add(
@@ -1696,7 +1757,7 @@ class SelectApagarVariosNPCs(
                 f"Selecionados: **"
                 f"{len(self.view_pai.selecionados)}**\n\n"
                 "Você pode trocar de página sem perder "
-                "os NPCs já selecionados."
+                "as seleções anteriores."
             ),
             view=self.view_pai
         )
@@ -1704,6 +1765,7 @@ class SelectApagarVariosNPCs(
 
 # ============================================================
 # VIEW — APAGAR VÁRIOS NPCS
+# ETAPA 3.6
 # ============================================================
 
 class ViewApagarVariosNPCs(
@@ -1718,7 +1780,6 @@ class ViewApagarVariosNPCs(
     ):
 
         self.channel_id = channel_id
-
         self.npcs = npcs
 
         self.pagina = 0
@@ -1888,7 +1949,8 @@ class ViewApagarVariosNPCs(
 
         linhas = [
             f"• 👹 **{nome_visual_npc(npc_id, nome)}**"
-            for npc_id, nome in resultados
+            for npc_id, nome
+            in resultados
         ]
 
         limite_exibicao = 25
@@ -1960,7 +2022,7 @@ class ViewApagarVariosNPCs(
 
 
 # ============================================================
-# CONFIRMAR EXCLUSÃO DOS NPCS SELECIONADOS
+# CONFIRMAR EXCLUSÃO DE NPCS
 # ============================================================
 
 class ViewConfirmarExclusaoNPCs(
@@ -2110,7 +2172,7 @@ class ViewConfirmarExclusaoNPCs(
 
 
 # ============================================================
-# CONFIRMAR EXCLUSÃO DE TODOS OS NPCS
+# CONFIRMAR TODOS OS NPCS
 # ============================================================
 
 class ViewConfirmarTodosNPCs(
@@ -2222,7 +2284,6 @@ class ViewModoExclusao(
     ):
 
         self.channel_id = channel_id
-
         self.npcs = npcs
 
         super().__init__(
@@ -2578,6 +2639,7 @@ def registrar_comandos_mestre(
 
     # ========================================================
     # LISTAR / VISUALIZAR NPCS
+    # ETAPA 3.6 + 3.7
     # ========================================================
 
     @bot.tree.command(
@@ -2638,6 +2700,7 @@ def registrar_comandos_mestre(
 
     # ========================================================
     # APAGAR NPC
+    # ETAPA 3.6 + 3.7
     # ========================================================
 
     @bot.tree.command(
