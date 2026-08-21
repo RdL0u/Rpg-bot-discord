@@ -10,7 +10,7 @@ from fichas import (
 
 
 # ============================================================
-# CONFIGURAÇÃO INICIAL DO PAINEL
+# CONFIGURAÇÃO DO PAINEL
 # ============================================================
 
 LIMITE_JOGADORES = 10
@@ -79,17 +79,6 @@ def formatar_jogador(
         "dono_id"
     )
 
-    membro = None
-
-    if (
-        guild is not None
-        and dono_id is not None
-    ):
-
-        membro = guild.get_member(
-            dono_id
-        )
-
     hp_atual = ficha.get(
         "hp_atual",
         0
@@ -120,23 +109,35 @@ def formatar_jogador(
         mana_max
     )
 
+    membro = None
+
+    if (
+        guild is not None
+        and dono_id is not None
+    ):
+
+        membro = guild.get_member(
+            dono_id
+        )
+
     if membro is not None:
 
-        identificacao = (
-            f"👤 **{nome}** • {membro.mention}"
+        titulo = (
+            f"👤 **{nome}** "
+            f"• {membro.mention}"
         )
 
     else:
 
-        identificacao = (
+        titulo = (
             f"👤 **{nome}**"
         )
 
     return (
-        f"{identificacao}\n"
-        f"❤️ **{hp_atual}/{hp_max}** "
+        f"{titulo}\n"
+        f"❤️ HP: **{hp_atual}/{hp_max}** "
         f"• {hp_estado}\n"
-        f"🔵 **{mana_atual}/{mana_max}** "
+        f"🔵 Mana: **{mana_atual}/{mana_max}** "
         f"• {mana_estado}"
     )
 
@@ -188,11 +189,15 @@ def formatar_npc(
         mana_max
     )
 
+    nome_visual = (
+        f"{nome} #{ficha_id}"
+    )
+
     return (
-        f"👹 **{nome} #{ficha_id}**\n"
-        f"❤️ **{hp_atual}/{hp_max}** "
+        f"👹 **{nome_visual}**\n"
+        f"❤️ HP: **{hp_atual}/{hp_max}** "
         f"• {hp_estado}\n"
-        f"🔵 **{mana_atual}/{mana_max}** "
+        f"🔵 Mana: **{mana_atual}/{mana_max}** "
         f"• {mana_estado}"
     )
 
@@ -209,21 +214,19 @@ def criar_texto_jogadores(
     if not jogadores:
 
         return (
-            "*Nenhum jogador possui ficha "
-            "nesta mesa.*"
+            "Nenhum jogador possui ficha "
+            "nesta mesa."
         )
 
-    linhas = []
+    blocos = []
 
-    jogadores_visiveis = (
-        jogadores[
-            :LIMITE_JOGADORES
-        ]
-    )
+    jogadores_visiveis = jogadores[
+        :LIMITE_JOGADORES
+    ]
 
     for ficha in jogadores_visiveis:
 
-        linhas.append(
+        blocos.append(
             formatar_jogador(
                 ficha,
                 guild
@@ -237,13 +240,13 @@ def criar_texto_jogadores(
 
     if restantes > 0:
 
-        linhas.append(
-            f"*... e mais "
-            f"**{restantes} jogador(es)**.*"
+        blocos.append(
+            f"➕ **{restantes} jogador(es) "
+            f"não exibido(s)**"
         )
 
     return "\n\n".join(
-        linhas
+        blocos
     )
 
 
@@ -258,21 +261,19 @@ def criar_texto_npcs(
     if not npcs:
 
         return (
-            "*Nenhum NPC ativo "
-            "nesta mesa.*"
+            "Nenhum NPC ativo "
+            "nesta mesa."
         )
 
-    linhas = []
+    blocos = []
 
-    npcs_visiveis = (
-        npcs[
-            :LIMITE_NPCS
-        ]
-    )
+    npcs_visiveis = npcs[
+        :LIMITE_NPCS
+    ]
 
     for ficha in npcs_visiveis:
 
-        linhas.append(
+        blocos.append(
             formatar_npc(
                 ficha
             )
@@ -285,13 +286,13 @@ def criar_texto_npcs(
 
     if restantes > 0:
 
-        linhas.append(
-            f"*... e mais "
-            f"**{restantes} NPC(s)**.*"
+        blocos.append(
+            f"➕ **{restantes} NPC(s) "
+            f"não exibido(s)**"
         )
 
     return "\n\n".join(
-        linhas
+        blocos
     )
 
 
@@ -310,17 +311,26 @@ def criar_painel(
         )
     )
 
-    total = (
-        len(jogadores)
-        + len(npcs)
+    total_jogadores = len(
+        jogadores
+    )
+
+    total_npcs = len(
+        npcs
+    )
+
+    total_fichas = (
+        total_jogadores
+        + total_npcs
     )
 
     embed = discord.Embed(
         title="📋 PAINEL DA MESA",
         description=(
-            f"**{total} ficha(s) ativa(s)**\n"
-            f"👤 Jogadores: **{len(jogadores)}**\n"
-            f"👹 NPCs: **{len(npcs)}**"
+            f"📊 **Resumo da mesa**\n\n"
+            f"👤 Jogadores: **{total_jogadores}**\n"
+            f"👹 NPCs: **{total_npcs}**\n"
+            f"📜 Total de fichas: **{total_fichas}**"
         ),
         color=discord.Color.dark_red()
     )
@@ -328,7 +338,7 @@ def criar_painel(
     embed.add_field(
         name=(
             f"👤 JOGADORES "
-            f"({len(jogadores)})"
+            f"({total_jogadores})"
         ),
         value=criar_texto_jogadores(
             jogadores,
@@ -340,7 +350,7 @@ def criar_painel(
     embed.add_field(
         name=(
             f"👹 NPCs "
-            f"({len(npcs)})"
+            f"({total_npcs})"
         ),
         value=criar_texto_npcs(
             npcs
@@ -351,7 +361,7 @@ def criar_painel(
     embed.set_footer(
         text=(
             "Painel da Mesa • "
-            "HP e Mana em tempo real"
+            "Jogadores 👤 • NPCs 👹"
         )
     )
 
