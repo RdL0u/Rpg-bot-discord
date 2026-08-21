@@ -4,11 +4,6 @@ from discord.ext import commands
 
 from config import TOKEN
 
-from database import (
-    db,
-    cursor
-)
-
 from comando.jogador import (
     registrar_comandos_jogador
 )
@@ -28,64 +23,6 @@ bot = commands.Bot(
     command_prefix="!",
     intents=intents
 )
-
-
-# ============================================================
-# FUNÇÕES AUXILIARES
-# ============================================================
-
-def garantir_mesa(channel_id):
-
-    cursor.execute("""
-        INSERT OR IGNORE INTO mesas (
-            channel_id,
-            mestre_id
-        )
-        VALUES (?, NULL)
-    """, (
-        channel_id,
-    ))
-
-    db.commit()
-
-
-def obter_mestre(channel_id):
-
-    cursor.execute("""
-        SELECT mestre_id
-        FROM mesas
-        WHERE channel_id = ?
-    """, (
-        channel_id,
-    ))
-
-    resultado = cursor.fetchone()
-
-    if resultado:
-        return resultado[0]
-
-    return None
-
-
-def eh_admin(interaction):
-
-    if interaction.guild is None:
-        return False
-
-    return interaction.user.guild_permissions.administrator
-
-
-def eh_mestre(interaction):
-
-    if interaction.channel is None:
-        return False
-
-    return (
-        obter_mestre(
-            interaction.channel.id
-        )
-        == interaction.user.id
-    )
 
 
 # ============================================================
