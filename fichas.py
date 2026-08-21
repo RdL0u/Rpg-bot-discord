@@ -89,7 +89,7 @@ def transformar_ficha(dados):
         "ciencias",
         "labia",
         "prontidao",
-        "conhecimentos_gerais",
+        "conhe._gerais",
         "lideranca",
         "sobrevivencia",
         "conducao",
