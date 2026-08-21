@@ -12,6 +12,10 @@ from comando.mestre import (
     registrar_comandos_mestre
 )
 
+from comando.painel import (
+    registrar_comandos_painel
+)
+
 
 # ============================================================
 # BOT
@@ -34,6 +38,10 @@ registrar_comandos_jogador(
 )
 
 registrar_comandos_mestre(
+    bot
+)
+
+registrar_comandos_painel(
     bot
 )
 
@@ -85,16 +93,16 @@ async def help(
     embed.add_field(
         name="👤 Jogador",
         value=(
-            "`/criarficha` — Criar sua ficha\n"
+            "`/criarficha` — Criar ficha\n"
             "`/ficha` — Ver sua ficha\n"
             "`/verficha` — Ver ficha de outro jogador\n"
             "`/atributo` — Alterar atributo\n"
             "`/pericia` — Alterar perícia\n"
             "`/alterarficha` — Alterar HP/Mana\n"
             "`/apagarficha` — Apagar ficha\n"
-            "`/gastarmana` — Gastar Mana\n"
-            "`/cura` — Curar jogador\n"
             "`/dano` — Aplicar dano\n"
+            "`/cura` — Recuperar HP\n"
+            "`/gastarmana` — Gastar Mana\n"
             "`/recuperarmana` — Recuperar Mana\n"
             "`/addxp` — Adicionar XP"
         ),
@@ -102,14 +110,22 @@ async def help(
     )
 
     embed.add_field(
+        name="📋 Mesa",
+        value=(
+            "`/painel` — Ver jogadores e NPCs "
+            "ativos da mesa"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
         name="👑 Mestre",
         value=(
-            "`/definirmestre` — Definir Mestre\n"
-            "`/passarmestre` — Passar Mestre\n"
-            "`/mestre` — Ver Mestre\n"
             "`/criarnpc` — Criar NPC\n"
-            "`/npcs` — Ver NPCs\n"
-            "`/apagarnpc` — Apagar NPC"
+            "`/npcs` — Gerenciar/visualizar NPCs\n"
+            "`/apagarnpc` — Apagar NPC\n"
+            "`/passarmestre` — Passar Mestre\n"
+            "`/mestre` — Ver Mestre"
         ),
         inline=False
     )
@@ -117,8 +133,7 @@ async def help(
     embed.add_field(
         name="🛡️ Administrador",
         value=(
-            "Permissões administrativas permitem "
-            "gerenciar o Mestre e os NPCs."
+            "`/definirmestre` — Definir Mestre"
         ),
         inline=False
     )
@@ -139,4 +154,6 @@ async def help(
 
 if __name__ == "__main__":
 
-    bot.run(TOKEN)
+    bot.run(
+        TOKEN
+    )
