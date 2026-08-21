@@ -225,7 +225,11 @@ def formatar_atributos(ficha):
         )
 
         linhas.append(
-            (emoji, nome, valor)
+            (
+                emoji,
+                nome,
+                valor
+            )
         )
 
     return linhas
@@ -249,33 +253,43 @@ def formatar_pericias(ficha):
         )
 
         linhas.append(
-            (emoji, nome, valor)
+            (
+                emoji,
+                nome,
+                valor
+            )
         )
 
     return linhas
 
 
 # ============================================================
-# CRIAR LINHA DE ATRIBUTO
+# LINHA DE ATRIBUTO
 # ============================================================
 
-def linha_atributo(emoji, nome, valor):
+def linha_atributo(
+    emoji,
+    nome,
+    valor
+):
 
     return (
-        f"{emoji} {nome} "
-        f"**{valor}**"
+        f"{emoji} {nome}: **{valor}**"
     )
 
 
 # ============================================================
-# CRIAR LINHA DE PERÍCIA
+# LINHA DE PERÍCIA
 # ============================================================
 
-def linha_pericia(emoji, nome, valor):
+def linha_pericia(
+    emoji,
+    nome,
+    valor
+):
 
     return (
-        f"{emoji} {nome} "
-        f"**{valor}**"
+        f"{emoji} {nome}: **{valor}**"
     )
 
 
@@ -283,7 +297,10 @@ def linha_pericia(emoji, nome, valor):
 # CRIAR PÁGINA DE STATUS
 # ============================================================
 
-def criar_pagina_status(ficha, jogador=None):
+def criar_pagina_status(
+    ficha,
+    jogador=None
+):
 
     nome = ficha.get(
         "nome",
@@ -331,10 +348,10 @@ def criar_pagina_status(ficha, jogador=None):
     embed.add_field(
         name="❤️ STATUS",
         value=(
-            f"❤️ HP       : **{hp_atual}/{hp_max}**\n"
-            f"🔵 Mana     : **{mana_atual}/{mana_max}**\n"
-            f"✨ XP       : **{xp}**\n"
-            f"⚡ RC       : **{rc}**"
+            f"❤️ HP: **{hp_atual}/{hp_max}**\n"
+            f"🔵 Mana: **{mana_atual}/{mana_max}**\n"
+            f"✨ XP: **{xp}**\n"
+            f"⚡ RC: **{rc}**"
         ),
         inline=False
     )
@@ -374,15 +391,17 @@ def criar_pagina_status(ficha, jogador=None):
         in coluna_2
     )
 
+    # Campo esquerdo
     embed.add_field(
         name="📊 ATRIBUTOS",
-        value=texto_1 or "Nenhum",
+        value=texto_1,
         inline=True
     )
 
+    # Campo direito
     embed.add_field(
         name="\u200b",
-        value=texto_2 or "Nenhum",
+        value=texto_2,
         inline=True
     )
 
@@ -412,7 +431,10 @@ def criar_pagina_status(ficha, jogador=None):
 # CRIAR PÁGINA DE PERÍCIAS
 # ============================================================
 
-def criar_pagina_pericias(ficha, jogador=None):
+def criar_pagina_pericias(
+    ficha,
+    jogador=None
+):
 
     nome = ficha.get(
         "nome",
@@ -455,15 +477,23 @@ def criar_pagina_pericias(ficha, jogador=None):
         in coluna_2
     )
 
+    # ========================================================
+    # COLUNA 1
+    # ========================================================
+
     embed.add_field(
         name="📚 PERÍCIAS",
-        value=texto_1 or "Nenhuma",
+        value=texto_1,
         inline=True
     )
 
+    # ========================================================
+    # COLUNA 2
+    # ========================================================
+
     embed.add_field(
         name="\u200b",
-        value=texto_2 or "Nenhuma",
+        value=texto_2,
         inline=True
     )
 
@@ -493,7 +523,9 @@ def criar_pagina_pericias(ficha, jogador=None):
 # VIEW DA FICHA
 # ============================================================
 
-class FichaView(discord.ui.View):
+class FichaView(
+    discord.ui.View
+):
 
     def __init__(
         self,
@@ -533,7 +565,8 @@ class FichaView(discord.ui.View):
 
     @discord.ui.button(
         label="◀ Status",
-        style=discord.ButtonStyle.secondary
+        style=discord.ButtonStyle.secondary,
+        row=0
     )
     async def status_button(
         self,
@@ -560,7 +593,8 @@ class FichaView(discord.ui.View):
 
     @discord.ui.button(
         label="Perícias ▶",
-        style=discord.ButtonStyle.secondary
+        style=discord.ButtonStyle.secondary,
+        row=0
     )
     async def pericias_button(
         self,
@@ -578,6 +612,47 @@ class FichaView(discord.ui.View):
                 self.jogador
             ),
             view=self
+        )
+
+
+    # ========================================================
+    # BOTÃO EDITAR
+    # ========================================================
+
+    @discord.ui.button(
+        label="✏️ Editar",
+        style=discord.ButtonStyle.primary,
+        row=1
+    )
+    async def editar_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        # ====================================================
+        # IMPORTANTE
+        # A validação definitiva de permissão continua sendo
+        # feita pela função pode_alterar_ficha().
+        # ====================================================
+
+        if not pode_alterar_ficha(
+            interaction,
+            self.ficha
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não pode editar esta ficha.",
+                ephemeral=True
+            )
+
+            return
+
+        await interaction.response.send_message(
+            "✏️ **Menu de edição**\n\n"
+            "Nesta etapa estamos preparando "
+            "as opções de edição da ficha.",
+            ephemeral=True
         )
 
 
