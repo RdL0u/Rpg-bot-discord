@@ -54,6 +54,9 @@ def transformar_ficha(dados):
     if dados is None:
         return None
 
+    # IMPORTANTE:
+    # Esta ordem deve continuar exatamente igual à tabela fichas.
+
     colunas = [
         "id",
         "channel_id",
@@ -89,7 +92,7 @@ def transformar_ficha(dados):
         "ciencias",
         "labia",
         "prontidao",
-        "conhe._gerais",
+        "conhecimentos_gerais",
         "lideranca",
         "sobrevivencia",
         "conducao",
@@ -208,30 +211,6 @@ def estado_recurso(atual, maximo):
 
 
 # ============================================================
-# FORMATAR ATRIBUTOS
-# ============================================================
-
-def formatar_atributos(ficha):
-
-    linhas = []
-
-    for chave, dados in ATRIBUTOS.items():
-
-        emoji, nome = dados
-
-        valor = ficha.get(
-            chave,
-            0
-        )
-
-        linhas.append(
-            (emoji, nome, valor)
-        )
-
-    return linhas
-
-
-# ============================================================
 # FORMATAR PERÍCIAS
 # ============================================================
 
@@ -243,66 +222,20 @@ def formatar_pericias(ficha):
 
         emoji, nome = PERICIAS[chave]
 
+        # Remove aspas triplas caso tenham sido inseridas
+        # acidentalmente no nome.
+        nome = nome.replace("'''", "").strip()
+
         valor = ficha.get(
             chave,
             0
         )
 
         linhas.append(
-            (emoji, nome, valor)
+            f"{emoji} {nome}: **{valor}**"
         )
 
     return linhas
-
-
-# ============================================================
-# LINHA DE ATRIBUTO
-# ============================================================
-
-def linha_atributo(emoji, nome, valor):
-
-    return f"{emoji} {nome}: **{valor}**"
-
-
-# ============================================================
-# LINHA DE PERÍCIA
-# ============================================================
-
-def linha_pericia(emoji, nome, valor):
-
-    return f"{emoji} {nome}: **{valor}**"
-
-
-# ============================================================
-# MONTAR DUAS COLUNAS
-# ============================================================
-
-def montar_duas_colunas(linhas):
-
-    if not linhas:
-        return "Nenhum"
-
-    metade = (len(linhas) + 1) // 2
-
-    coluna_1 = linhas[:metade]
-    coluna_2 = linhas[metade:]
-
-    resultado = []
-
-    for indice in range(metade):
-
-        esquerda = coluna_1[indice]
-
-        if indice < len(coluna_2):
-            direita = coluna_2[indice]
-        else:
-            direita = ""
-
-        resultado.append(
-            f"{esquerda:<32} {direita}"
-        )
-
-    return "\n".join(resultado)
 
 
 # ============================================================
@@ -357,9 +290,9 @@ def criar_pagina_status(ficha, jogador=None):
     embed.add_field(
         name="❤️ STATUS",
         value=(
-            f"❤️ HP: **{hp_atual}/{hp_max}**\n"
+            f"❤️ HP: **{hp_atual}/{hp_max}**    "
             f"🔵 Mana: **{mana_atual}/{mana_max}**\n"
-            f"✨ XP: **{xp}**\n"
+            f"✨ XP: **{xp}**    "
             f"⚡ RC: **{rc}**"
         ),
         inline=False
@@ -367,26 +300,25 @@ def criar_pagina_status(ficha, jogador=None):
 
     # ========================================================
     # ATRIBUTOS
+    #
+    # A ordem é declarada manualmente de propósito.
+    # Assim For/Des, Vig/Int e Car/Rac nunca são trocados.
     # ========================================================
 
-    atributos = formatar_atributos(
-        ficha
-    )
+    atributos = (
+        f"💪 For: **{ficha.get('forca', 0)}**"
+        f"  🏹 Des: **{ficha.get('destreza', 0)}**\n"
 
-    linhas_atributos = [
-        linha_atributo(
-            emoji,
-            nome_atributo,
-            valor
-        )
-        for emoji, nome_atributo, valor in atributos
-    ]
+        f"🛡️ Vig: **{ficha.get('vigor', 0)}**"
+        f"  🧠 Int: **{ficha.get('inteligencia', 0)}**\n"
+
+        f"🎭 Car: **{ficha.get('carisma', 0)}**"
+        f"  💡 Rac: **{ficha.get('raciocinio', 0)}**"
+    )
 
     embed.add_field(
         name="📊 ATRIBUTOS",
-        value=montar_duas_colunas(
-            linhas_atributos
-        ),
+        value=atributos,
         inline=False
     )
 
@@ -432,20 +364,17 @@ def criar_pagina_pericias(ficha, jogador=None):
         ficha
     )
 
-    linhas_pericias = [
-        linha_pericia(
-            emoji,
-            nome_pericia,
-            valor
-        )
-        for emoji, nome_pericia, valor in linhas
-    ]
+    texto_pericias = "\n".join(
+        linhas
+    )
+
+    # ========================================================
+    # PERÍCIAS EM UMA COLUNA
+    # ========================================================
 
     embed.add_field(
         name="📚 PERÍCIAS",
-        value=montar_duas_colunas(
-            linhas_pericias
-        ),
+        value=texto_pericias or "Nenhuma",
         inline=False
     )
 
@@ -469,6 +398,170 @@ def criar_pagina_pericias(ficha, jogador=None):
         )
 
     return embed
+
+
+# ============================================================
+# VERIFICAR SE PODE ALTERAR FICHA
+# ============================================================
+
+def pode_alterar_ficha(
+    interaction,
+    ficha
+):
+
+    if ficha is None:
+        return False
+
+    # ========================================================
+    # ADMINISTRADOR
+    # ========================================================
+
+    if (
+        interaction.guild
+        and interaction.user.guild_permissions.administrator
+    ):
+        return True
+
+    # ========================================================
+    # DONO DA FICHA
+    # ========================================================
+
+    if (
+        ficha.get("dono_id")
+        == interaction.user.id
+    ):
+        return True
+
+    # ========================================================
+    # MESTRE
+    # ========================================================
+
+    mestre_id = ficha.get(
+        "mestre_id"
+    )
+
+    if (
+        mestre_id is not None
+        and mestre_id
+        == interaction.user.id
+    ):
+        return True
+
+    return False
+
+
+# ============================================================
+# MENU DE EDIÇÃO — ETAPA 1.2
+# ============================================================
+
+class MenuEdicao(discord.ui.Select):
+
+    def __init__(
+        self,
+        ficha,
+        jogador=None
+    ):
+
+        self.ficha = ficha
+        self.jogador = jogador
+
+        opcoes = [
+            discord.SelectOption(
+                label="Atributos",
+                description="Editar atributos da ficha.",
+                emoji="📊",
+                value="atributos"
+            ),
+            discord.SelectOption(
+                label="Perícias",
+                description="Editar perícias da ficha.",
+                emoji="📚",
+                value="pericias"
+            ),
+            discord.SelectOption(
+                label="HP / Mana",
+                description="Editar HP e Mana.",
+                emoji="❤️",
+                value="recursos"
+            ),
+            discord.SelectOption(
+                label="XP",
+                description="Editar experiência.",
+                emoji="✨",
+                value="xp"
+            )
+        ]
+
+        super().__init__(
+            placeholder="✏️ Escolha o que deseja editar...",
+            min_values=1,
+            max_values=1,
+            options=opcoes
+        )
+
+
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        # Confere novamente a permissão.
+        if not pode_alterar_ficha(
+            interaction,
+            self.ficha
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não tem permissão para editar esta ficha.",
+                ephemeral=True
+            )
+
+            return
+
+        escolha = self.values[0]
+
+        nomes = {
+            "atributos": "📊 Atributos",
+            "pericias": "📚 Perícias",
+            "recursos": "❤️ HP / Mana",
+            "xp": "✨ XP"
+        }
+
+        nome_escolhido = nomes.get(
+            escolha,
+            "Opção"
+        )
+
+        await interaction.response.send_message(
+            f"✏️ Você selecionou **{nome_escolhido}**.\n\n"
+            "Essa opção será ligada ao editor "
+            "nas próximas etapas.",
+            ephemeral=True
+        )
+
+
+# ============================================================
+# VIEW DO MENU DE EDIÇÃO
+# ============================================================
+
+class MenuEdicaoView(discord.ui.View):
+
+    def __init__(
+        self,
+        ficha,
+        jogador=None
+    ):
+
+        super().__init__(
+            timeout=120
+        )
+
+        self.add_item(
+            MenuEdicao(
+                ficha,
+                jogador
+            )
+        )
 
 
 # ============================================================
@@ -507,8 +600,6 @@ class FichaView(discord.ui.View):
         self.pericias_button.disabled = (
             self.pagina == 2
         )
-
-        self.editar_button.disabled = False
 
 
     # ========================================================
@@ -596,56 +687,10 @@ class FichaView(discord.ui.View):
 
         await interaction.response.send_message(
             "✏️ **Menu de edição**\n\n"
-            "O sistema de edição está sendo preparado.",
+            "Escolha abaixo o que deseja editar:",
+            view=MenuEdicaoView(
+                self.ficha,
+                self.jogador
+            ),
             ephemeral=True
         )
-
-
-# ============================================================
-# VERIFICAR SE PODE ALTERAR FICHA
-# ============================================================
-
-def pode_alterar_ficha(
-    interaction,
-    ficha
-):
-
-    if ficha is None:
-        return False
-
-    # ========================================================
-    # ADMINISTRADOR
-    # ========================================================
-
-    if (
-        interaction.guild
-        and interaction.user.guild_permissions.administrator
-    ):
-        return True
-
-    # ========================================================
-    # DONO DA FICHA
-    # ========================================================
-
-    if (
-        ficha.get("dono_id")
-        == interaction.user.id
-    ):
-        return True
-
-    # ========================================================
-    # MESTRE
-    # ========================================================
-
-    mestre_id = ficha.get(
-        "mestre_id"
-    )
-
-    if (
-        mestre_id is not None
-        and mestre_id
-        == interaction.user.id
-    ):
-        return True
-
-    return False
