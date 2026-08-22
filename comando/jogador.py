@@ -23,7 +23,53 @@ from fichas import (
 from config import (
     ATRIBUTOS,
     PERICIAS,
+    ORDEM_PERICIAS,
 )
+
+
+# ============================================================
+# NOMES COMPLETOS DOS ATRIBUTOS
+# ============================================================
+
+NOMES_ATRIBUTOS = {
+    "forca": "Força",
+    "destreza": "Destreza",
+    "vigor": "Vigor",
+    "inteligencia": "Inteligência",
+    "carisma": "Carisma",
+    "raciocinio": "Raciocínio",
+}
+
+
+# ============================================================
+# GRUPOS DE ATRIBUTOS
+# ============================================================
+
+GRUPOS_ATRIBUTOS_JOGADOR = [
+    [
+        "forca",
+        "destreza",
+        "vigor",
+    ],
+    [
+        "inteligencia",
+        "carisma",
+        "raciocinio",
+    ],
+]
+
+
+# ============================================================
+# GRUPOS DE PERÍCIAS
+# ============================================================
+
+GRUPOS_PERICIAS_JOGADOR = [
+    ORDEM_PERICIAS[0:5],
+    ORDEM_PERICIAS[5:10],
+    ORDEM_PERICIAS[10:15],
+    ORDEM_PERICIAS[15:20],
+    ORDEM_PERICIAS[20:23],
+]
 
 
 # ============================================================
@@ -87,46 +133,410 @@ def buscar_ficha_por_id(
 
 
 # ============================================================
-# REGISTRAR COMANDOS
+# SESSÃO DE CRIAÇÃO DO JOGADOR
 # ============================================================
 
-def registrar_comandos_jogador(
-    bot
+class SessaoCriacaoJogador:
+
+    def __init__(
+        self,
+        channel_id,
+        usuario_id
+    ):
+
+        self.channel_id = channel_id
+        self.usuario_id = usuario_id
+
+        self.nome = None
+        self.hp = None
+        self.mana = None
+
+        self.atributos = {}
+        self.pericias = {}
+
+
+# ============================================================
+# VIEW BASE DA CRIAÇÃO
+# ============================================================
+
+class ViewSessaoJogador(
+    discord.ui.View
+):
+
+    def __init__(
+        self,
+        sessao,
+        timeout=300
+    ):
+
+        super().__init__(
+            timeout=timeout
+        )
+
+        self.sessao = sessao
+
+
+    async def interaction_check(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if (
+            interaction.user.id
+            != self.sessao.usuario_id
+        ):
+
+            await interaction.response.send_message(
+                "❌ Somente o jogador que iniciou "
+                "a criação da ficha pode usar "
+                "estes controles.",
+                ephemeral=True
+            )
+
+            return False
+
+        return True
+
+
+# ============================================================
+# FINALIZAR CRIAÇÃO DA FICHA
+# ============================================================
+
+async def finalizar_criacao_jogador(
+    interaction,
+    sessao
 ):
 
     # ========================================================
-    # CRIAR FICHA
+    # VERIFICAR SE JÁ EXISTE FICHA
     # ========================================================
 
-    @bot.tree.command(
-        name="criarficha",
-        description="Cria sua ficha neste canal."
+    existente = buscar_ficha_jogador(
+        sessao.channel_id,
+        sessao.usuario_id
     )
-    @app_commands.describe(
-        nome="Nome do personagem",
-        hp="HP máximo",
-        mana="Mana máxima"
-    )
-    async def criarficha(
-        interaction: discord.Interaction,
-        nome: str,
-        hp: int,
-        mana: int
+
+    if existente is not None:
+
+        await interaction.response.send_message(
+            "❌ Você já possui uma ficha neste canal.",
+            ephemeral=True
+        )
+
+        return
+
+    # ========================================================
+    # VALIDAR DADOS BÁSICOS
+    # ========================================================
+
+    if not sessao.nome:
+
+        await interaction.response.send_message(
+            "❌ O personagem está sem nome.",
+            ephemeral=True
+        )
+
+        return
+
+    if (
+        sessao.hp is None
+        or sessao.hp <= 0
     ):
 
-        garantir_mesa(
-            interaction.channel.id
+        await interaction.response.send_message(
+            "❌ O HP da ficha é inválido.",
+            ephemeral=True
         )
 
-        existente = buscar_ficha_jogador(
-            interaction.channel.id,
-            interaction.user.id
+        return
+
+    if (
+        sessao.mana is None
+        or sessao.mana < 0
+    ):
+
+        await interaction.response.send_message(
+            "❌ A Mana da ficha é inválida.",
+            ephemeral=True
         )
 
-        if existente is not None:
+        return
+
+    # ========================================================
+    # VALIDAR ATRIBUTOS
+    # ========================================================
+
+    for chave in ATRIBUTOS:
+
+        if chave not in sessao.atributos:
 
             await interaction.response.send_message(
-                "❌ Você já possui uma ficha neste canal.",
+                f"❌ O atributo `{chave}` "
+                f"não foi preenchido.",
+                ephemeral=True
+            )
+
+            return
+
+        valor = sessao.atributos[
+            chave
+        ]
+
+        if valor < 0:
+
+            await interaction.response.send_message(
+                f"❌ O atributo `{chave}` "
+                f"não pode ser negativo.",
+                ephemeral=True
+            )
+
+            return
+
+    # ========================================================
+    # VALIDAR PERÍCIAS
+    # ========================================================
+
+    for chave in ORDEM_PERICIAS:
+
+        if chave not in sessao.pericias:
+
+            await interaction.response.send_message(
+                f"❌ A perícia `{chave}` "
+                f"não foi preenchida.",
+                ephemeral=True
+            )
+
+            return
+
+        valor = sessao.pericias[
+            chave
+        ]
+
+        if (
+            valor < 0
+            or valor > 5
+        ):
+
+            await interaction.response.send_message(
+                f"❌ A perícia `{chave}` "
+                f"precisa estar entre 0 e 5.",
+                ephemeral=True
+            )
+
+            return
+
+    # ========================================================
+    # PREPARAR COLUNAS
+    # ========================================================
+
+    colunas = (
+        list(
+            ATRIBUTOS.keys()
+        )
+        +
+        ORDEM_PERICIAS
+    )
+
+    valores = (
+        [
+            sessao.atributos[
+                chave
+            ]
+            for chave in ATRIBUTOS
+        ]
+        +
+        [
+            sessao.pericias[
+                chave
+            ]
+            for chave in ORDEM_PERICIAS
+        ]
+    )
+
+    placeholders = ", ".join(
+        ["?"] * len(valores)
+    )
+
+    nome = sessao.nome[:50]
+
+    # ========================================================
+    # INSERIR FICHA
+    # ========================================================
+
+    cursor.execute(
+        f"""
+        INSERT INTO fichas (
+            channel_id,
+            dono_id,
+            mestre_id,
+            tipo,
+            nome,
+
+            hp_atual,
+            hp_max,
+
+            mana_atual,
+            mana_max,
+
+            xp,
+
+            {", ".join(colunas)},
+
+            aleatorio
+        )
+        VALUES (
+            ?, ?, NULL, 'jogador', ?,
+
+            ?, ?,
+
+            ?, ?,
+
+            0,
+
+            {placeholders},
+
+            0
+        )
+        """,
+        [
+            sessao.channel_id,
+            sessao.usuario_id,
+            nome,
+
+            sessao.hp,
+            sessao.hp,
+
+            sessao.mana,
+            sessao.mana
+        ]
+        + valores
+    )
+
+    db.commit()
+
+    ficha_id = (
+        cursor.lastrowid
+    )
+
+    # ========================================================
+    # CALCULAR RC
+    # ========================================================
+
+    rc = (
+        sessao.pericias[
+            "esquiva"
+        ]
+        +
+        sessao.atributos[
+            "destreza"
+        ]
+        +
+        5
+    )
+
+    # ========================================================
+    # MENSAGEM FINAL
+    # ========================================================
+
+    await interaction.response.send_message(
+        f"📜 Ficha de **{nome}** "
+        f"criada com sucesso!\n\n"
+        f"❤️ HP: **{sessao.hp}/{sessao.hp}**\n"
+        f"🔵 Mana: **{sessao.mana}/{sessao.mana}**\n"
+        f"✨ XP: **0**\n"
+        f"⚡ RC: **{rc}**\n\n"
+        f"⚔️ **6 atributos preenchidos**\n"
+        f"📚 **23 perícias preenchidas**\n\n"
+        f"🆔 Ficha: **#{ficha_id}**",
+        ephemeral=True
+    )
+
+
+# ============================================================
+# MODAL DOS DADOS BÁSICOS
+# ============================================================
+
+class ModalDadosJogador(
+    discord.ui.Modal,
+    title="Criar ficha"
+):
+
+    def __init__(
+        self,
+        sessao
+    ):
+
+        super().__init__()
+
+        self.sessao = sessao
+
+        self.nome = discord.ui.TextInput(
+            label="Nome do personagem",
+            placeholder="Ex.: Arthur",
+            required=True,
+            max_length=50
+        )
+
+        self.hp = discord.ui.TextInput(
+            label="HP máximo",
+            placeholder="Ex.: 20",
+            required=True,
+            max_length=7
+        )
+
+        self.mana = discord.ui.TextInput(
+            label="Mana máxima",
+            placeholder="Ex.: 10",
+            required=True,
+            max_length=7
+        )
+
+        self.add_item(
+            self.nome
+        )
+
+        self.add_item(
+            self.hp
+        )
+
+        self.add_item(
+            self.mana
+        )
+
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if (
+            interaction.user.id
+            != self.sessao.usuario_id
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não pode preencher "
+                "este formulário.",
+                ephemeral=True
+            )
+
+            return
+
+        try:
+
+            hp = int(
+                self.hp.value
+            )
+
+            mana = int(
+                self.mana.value
+            )
+
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ HP e Mana precisam ser "
+                "números inteiros.",
                 ephemeral=True
             )
 
@@ -150,96 +560,515 @@ def registrar_comandos_jogador(
 
             return
 
-        nome = nome.strip()[:50]
+        nome = (
+            self.nome.value
+            .strip()
+        )
 
-        cursor.execute("""
-            INSERT INTO fichas (
-                channel_id,
-                dono_id,
-                mestre_id,
-                tipo,
-                nome,
+        if not nome:
 
-                hp_atual,
-                hp_max,
-
-                mana_atual,
-                mana_max,
-
-                xp,
-
-                forca,
-                destreza,
-                vigor,
-                inteligencia,
-                carisma,
-                raciocinio,
-
-                academicos,
-                idiomas,
-                oficios,
-                armas_brancas,
-                intimidacao,
-                ocultismo,
-                briga,
-                investigacao,
-                persuasao,
-                ciencias,
-                labia,
-                prontidao,
-                conhecimentos_gerais,
-                lideranca,
-                sobrevivencia,
-                conducao,
-                manha,
-                tecnologia,
-                esportes,
-                medicina,
-                mira,
-                esquiva,
-                furtividade,
-
-                aleatorio
+            await interaction.response.send_message(
+                "❌ Informe um nome válido.",
+                ephemeral=True
             )
-            VALUES (
-                ?, ?, NULL, 'jogador', ?,
 
-                ?, ?,
+            return
 
-                ?, ?,
+        self.sessao.nome = (
+            nome[:50]
+        )
 
-                0,
-
-                0, 0, 0, 0, 0, 0,
-
-                0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0,
-                0, 0, 0,
-
-                0
-            )
-        """, (
-            interaction.channel.id,
-            interaction.user.id,
-            nome,
-
-            hp,
-            hp,
-
-            mana,
-            mana
-        ))
-
-        db.commit()
+        self.sessao.hp = hp
+        self.sessao.mana = mana
 
         await interaction.response.send_message(
-            f"📜 Ficha de **{nome}** criada!\n\n"
-            f"❤️ HP: **{hp}/{hp}**\n"
-            f"🔵 Mana: **{mana}/{mana}**\n"
-            f"✨ XP: **0**\n"
-            f"⚡ RC: **5**"
+            f"✅ Dados básicos salvos.\n\n"
+            f"👤 **{self.sessao.nome}**\n"
+            f"❤️ HP: **{hp}**\n"
+            f"🔵 Mana: **{mana}**\n\n"
+            f"⚔️ Agora vamos preencher "
+            f"os **atributos**.",
+            view=ViewIniciarAtributosJogador(
+                self.sessao
+            ),
+            ephemeral=True
+        )
+
+
+# ============================================================
+# INICIAR ATRIBUTOS
+# ============================================================
+
+class ViewIniciarAtributosJogador(
+    ViewSessaoJogador
+):
+
+    @discord.ui.button(
+        label="⚔️ Preencher atributos",
+        style=discord.ButtonStyle.primary
+    )
+    async def continuar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            ModalAtributosJogador(
+                self.sessao,
+                grupo=0
+            )
+        )
+
+
+# ============================================================
+# MODAL DE ATRIBUTOS
+# ============================================================
+
+class ModalAtributosJogador(
+    discord.ui.Modal
+):
+
+    def __init__(
+        self,
+        sessao,
+        grupo
+    ):
+
+        self.sessao = sessao
+        self.grupo = grupo
+
+        campos = (
+            GRUPOS_ATRIBUTOS_JOGADOR[
+                grupo
+            ]
+        )
+
+        super().__init__(
+            title=(
+                f"Atributos "
+                f"{grupo + 1}/"
+                f"{len(GRUPOS_ATRIBUTOS_JOGADOR)}"
+            )
+        )
+
+        self.inputs = {}
+
+        for chave in campos:
+
+            campo = discord.ui.TextInput(
+                label=NOMES_ATRIBUTOS[
+                    chave
+                ],
+                placeholder="Valor",
+                default=str(
+                    sessao.atributos.get(
+                        chave,
+                        0
+                    )
+                ),
+                required=True,
+                max_length=5
+            )
+
+            self.inputs[
+                chave
+            ] = campo
+
+            self.add_item(
+                campo
+            )
+
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if (
+            interaction.user.id
+            != self.sessao.usuario_id
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não pode preencher "
+                "este formulário.",
+                ephemeral=True
+            )
+
+            return
+
+        valores = {}
+
+        try:
+
+            for chave, campo in (
+                self.inputs.items()
+            ):
+
+                valor = int(
+                    campo.value
+                )
+
+                if valor < 0:
+                    raise ValueError
+
+                valores[
+                    chave
+                ] = valor
+
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ Todos os atributos precisam "
+                "ser números inteiros maiores "
+                "ou iguais a 0.",
+                ephemeral=True
+            )
+
+            return
+
+        self.sessao.atributos.update(
+            valores
+        )
+
+        proximo = (
+            self.grupo + 1
+        )
+
+        if (
+            proximo
+            < len(
+                GRUPOS_ATRIBUTOS_JOGADOR
+            )
+        ):
+
+            await interaction.response.send_message(
+                f"✅ Atributos "
+                f"{self.grupo + 1}/"
+                f"{len(GRUPOS_ATRIBUTOS_JOGADOR)} "
+                f"salvos.\n\n"
+                f"Clique abaixo para continuar.",
+                view=ViewContinuarAtributosJogador(
+                    self.sessao,
+                    proximo
+                ),
+                ephemeral=True
+            )
+
+            return
+
+        await interaction.response.send_message(
+            "✅ Todos os atributos foram salvos.\n\n"
+            "📚 Agora vamos preencher "
+            "as **perícias**.",
+            view=ViewIniciarPericiasJogador(
+                self.sessao
+            ),
+            ephemeral=True
+        )
+
+
+# ============================================================
+# CONTINUAR ATRIBUTOS
+# ============================================================
+
+class ViewContinuarAtributosJogador(
+    ViewSessaoJogador
+):
+
+    def __init__(
+        self,
+        sessao,
+        grupo
+    ):
+
+        super().__init__(
+            sessao
+        )
+
+        self.grupo = grupo
+
+
+    @discord.ui.button(
+        label="➡️ Continuar atributos",
+        style=discord.ButtonStyle.primary
+    )
+    async def continuar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            ModalAtributosJogador(
+                self.sessao,
+                self.grupo
+            )
+        )
+
+
+# ============================================================
+# INICIAR PERÍCIAS
+# ============================================================
+
+class ViewIniciarPericiasJogador(
+    ViewSessaoJogador
+):
+
+    @discord.ui.button(
+        label="📚 Preencher perícias",
+        style=discord.ButtonStyle.primary
+    )
+    async def continuar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            ModalPericiasJogador(
+                self.sessao,
+                grupo=0
+            )
+        )
+
+
+# ============================================================
+# MODAL DE PERÍCIAS
+# ============================================================
+
+class ModalPericiasJogador(
+    discord.ui.Modal
+):
+
+    def __init__(
+        self,
+        sessao,
+        grupo
+    ):
+
+        self.sessao = sessao
+        self.grupo = grupo
+
+        campos = (
+            GRUPOS_PERICIAS_JOGADOR[
+                grupo
+            ]
+        )
+
+        super().__init__(
+            title=(
+                f"Perícias "
+                f"{grupo + 1}/"
+                f"{len(GRUPOS_PERICIAS_JOGADOR)}"
+            )
+        )
+
+        self.inputs = {}
+
+        for chave in campos:
+
+            emoji, nome = PERICIAS[
+                chave
+            ]
+
+            campo = discord.ui.TextInput(
+                label=nome[:45],
+                placeholder="Valor de 0 a 5",
+                default=str(
+                    sessao.pericias.get(
+                        chave,
+                        0
+                    )
+                ),
+                required=True,
+                max_length=1
+            )
+
+            self.inputs[
+                chave
+            ] = campo
+
+            self.add_item(
+                campo
+            )
+
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if (
+            interaction.user.id
+            != self.sessao.usuario_id
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não pode preencher "
+                "este formulário.",
+                ephemeral=True
+            )
+
+            return
+
+        valores = {}
+
+        try:
+
+            for chave, campo in (
+                self.inputs.items()
+            ):
+
+                valor = int(
+                    campo.value
+                )
+
+                if (
+                    valor < 0
+                    or valor > 5
+                ):
+
+                    raise ValueError
+
+                valores[
+                    chave
+                ] = valor
+
+        except ValueError:
+
+            await interaction.response.send_message(
+                "❌ Todas as perícias precisam "
+                "ser números inteiros entre "
+                "**0 e 5**.",
+                ephemeral=True
+            )
+
+            return
+
+        self.sessao.pericias.update(
+            valores
+        )
+
+        proximo = (
+            self.grupo + 1
+        )
+
+        if (
+            proximo
+            < len(
+                GRUPOS_PERICIAS_JOGADOR
+            )
+        ):
+
+            await interaction.response.send_message(
+                f"✅ Perícias "
+                f"{self.grupo + 1}/"
+                f"{len(GRUPOS_PERICIAS_JOGADOR)} "
+                f"salvas.\n\n"
+                f"Clique abaixo para continuar.",
+                view=ViewContinuarPericiasJogador(
+                    self.sessao,
+                    proximo
+                ),
+                ephemeral=True
+            )
+
+            return
+
+        await finalizar_criacao_jogador(
+            interaction,
+            self.sessao
+        )
+
+
+# ============================================================
+# CONTINUAR PERÍCIAS
+# ============================================================
+
+class ViewContinuarPericiasJogador(
+    ViewSessaoJogador
+):
+
+    def __init__(
+        self,
+        sessao,
+        grupo
+    ):
+
+        super().__init__(
+            sessao
+        )
+
+        self.grupo = grupo
+
+
+    @discord.ui.button(
+        label="➡️ Continuar perícias",
+        style=discord.ButtonStyle.primary
+    )
+    async def continuar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+            ModalPericiasJogador(
+                self.sessao,
+                self.grupo
+            )
+        )
+
+
+# ============================================================
+# REGISTRAR COMANDOS
+# ============================================================
+
+def registrar_comandos_jogador(
+    bot
+):
+
+    # ========================================================
+    # CRIAR FICHA
+    # ========================================================
+
+    @bot.tree.command(
+        name="criarficha",
+        description="Inicia a criação guiada da sua ficha."
+    )
+    async def criarficha(
+        interaction: discord.Interaction
+    ):
+
+        garantir_mesa(
+            interaction.channel.id
+        )
+
+        existente = buscar_ficha_jogador(
+            interaction.channel.id,
+            interaction.user.id
+        )
+
+        if existente is not None:
+
+            await interaction.response.send_message(
+                "❌ Você já possui uma ficha neste canal.",
+                ephemeral=True
+            )
+
+            return
+
+        sessao = SessaoCriacaoJogador(
+            interaction.channel.id,
+            interaction.user.id
+        )
+
+        await interaction.response.send_modal(
+            ModalDadosJogador(
+                sessao
+            )
         )
 
 
@@ -453,7 +1282,6 @@ def registrar_comandos_jogador(
 
     # ========================================================
     # PERÍCIA
-    # LIMITE GLOBAL: 0 A 5
     # ========================================================
 
     @bot.tree.command(
@@ -737,8 +1565,13 @@ def registrar_comandos_jogador(
 
         db.commit()
 
-        novo_hp = f"{hp}/{hp}"
-        nova_mana = f"{mana}/{mana}"
+        novo_hp = (
+            f"{hp}/{hp}"
+        )
+
+        nova_mana = (
+            f"{mana}/{mana}"
+        )
 
         if hp_anterior != novo_hp:
 
@@ -856,7 +1689,9 @@ def registrar_comandos_jogador(
                 interaction_original.channel.id,
             ))
 
-            resultados = cursor.fetchall()
+            resultados = (
+                cursor.fetchall()
+            )
 
             opcoes = []
 
@@ -959,7 +1794,7 @@ def registrar_comandos_jogador(
 
 
     # ========================================================
-    # MODAL DE VALOR DA AÇÃO
+    # MODAL DE VALOR
     # ========================================================
 
     class ValorAcaoModal(
@@ -1054,9 +1889,9 @@ def registrar_comandos_jogador(
 
             if self.acao == "dano":
 
-                hp_anterior = f[
-                    "hp_atual"
-                ]
+                hp_anterior = (
+                    f["hp_atual"]
+                )
 
                 novo_hp = max(
                     0,
@@ -1142,9 +1977,9 @@ def registrar_comandos_jogador(
 
             if self.acao == "cura":
 
-                hp_anterior = f[
-                    "hp_atual"
-                ]
+                hp_anterior = (
+                    f["hp_atual"]
+                )
 
                 novo_hp = min(
                     f["hp_max"],
@@ -1167,7 +2002,10 @@ def registrar_comandos_jogador(
 
                 db.commit()
 
-                if novo_hp != hp_anterior:
+                if (
+                    novo_hp
+                    != hp_anterior
+                ):
 
                     registrar_historico(
                         f["channel_id"],
@@ -1197,11 +2035,14 @@ def registrar_comandos_jogador(
             # RECUPERAR MANA
             # =================================================
 
-            if self.acao == "recuperarmana":
+            if (
+                self.acao
+                == "recuperarmana"
+            ):
 
-                mana_anterior = f[
-                    "mana_atual"
-                ]
+                mana_anterior = (
+                    f["mana_atual"]
+                )
 
                 nova_mana = min(
                     f["mana_max"],
@@ -1224,7 +2065,10 @@ def registrar_comandos_jogador(
 
                 db.commit()
 
-                if nova_mana != mana_anterior:
+                if (
+                    nova_mana
+                    != mana_anterior
+                ):
 
                     registrar_historico(
                         f["channel_id"],
@@ -1237,7 +2081,8 @@ def registrar_comandos_jogador(
                         valor_anterior=mana_anterior,
                         valor_novo=nova_mana,
                         descricao=(
-                            f"💧 {recuperado} de Mana recuperada."
+                            f"💧 {recuperado} "
+                            f"de Mana recuperada."
                         )
                     )
 
@@ -1412,7 +2257,9 @@ def registrar_comandos_jogador(
             dados
         )
 
-        if valor > f["mana_atual"]:
+        if valor > f[
+            "mana_atual"
+        ]:
 
             await interaction.response.send_message(
                 "❌ Você não possui Mana suficiente.",
@@ -1421,9 +2268,9 @@ def registrar_comandos_jogador(
 
             return
 
-        mana_anterior = f[
-            "mana_atual"
-        ]
+        mana_anterior = (
+            f["mana_atual"]
+        )
 
         nova_mana = (
             mana_anterior
@@ -1516,15 +2363,16 @@ def registrar_comandos_jogador(
         if valor <= 0:
 
             await interaction.response.send_message(
-                "❌ O XP adicionado precisa ser maior que 0.",
+                "❌ O XP adicionado precisa "
+                "ser maior que 0.",
                 ephemeral=True
             )
 
             return
 
-        xp_anterior = f[
-            "xp"
-        ]
+        xp_anterior = (
+            f["xp"]
+        )
 
         novo_xp = (
             xp_anterior
