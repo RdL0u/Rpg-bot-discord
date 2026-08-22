@@ -1,571 +1,471 @@
-import math
-from datetime import datetime, timezone
-
 import discord
-from discord import app_commands
 
-from database import cursor
+from datetime import (
+    datetime,
+    timezone,
+)
+
+from database import (
+    buscar_historico,
+)
+
+from comando.permissoes import (
+    pode_ver_historico,
+)
 
 
 # ============================================================
 # CONFIGURAÇÃO
 # ============================================================
 
-REGISTROS_POR_PAGINA = 5
+ITENS_POR_PAGINA = 5
 
 
 # ============================================================
-# CAMPOS
+# FILTROS
 # ============================================================
 
-NOMES_CAMPOS = {
+FILTROS = {
+    "tudo": "Tudo",
+    "jogadores": "Jogadores",
+    "npcs": "NPCs",
     "hp": "HP",
-    "hp_atual": "HP atual",
-    "hp_max": "HP máximo",
-
     "mana": "Mana",
-    "mana_atual": "Mana atual",
-    "mana_max": "Mana máxima",
-
     "xp": "XP",
-
-    "forca": "Força",
-    "destreza": "Destreza",
-    "vigor": "Vigor",
-    "inteligencia": "Inteligência",
-    "carisma": "Carisma",
-    "raciocinio": "Raciocínio",
-
-    "academicos": "Acadêmicos",
-    "idiomas": "Idiomas",
-    "oficios": "Ofícios",
-    "armas_brancas": "Armas Brancas",
-    "intimidacao": "Intimidação",
-    "ocultismo": "Ocultismo",
-    "briga": "Briga",
-    "investigacao": "Investigação",
-    "persuasao": "Persuasão",
-    "ciencias": "Ciências",
-    "labia": "Lábia",
-    "prontidao": "Prontidão",
-    "conhecimentos_gerais": "Conhecimentos Gerais",
-    "lideranca": "Liderança",
-    "sobrevivencia": "Sobrevivência",
-    "conducao": "Condução",
-    "manha": "Manha",
-    "tecnologia": "Tecnologia",
-    "esportes": "Esportes",
-    "medicina": "Medicina",
-    "mira": "Mira",
-    "esquiva": "Esquiva",
-    "furtividade": "Furtividade",
-}
-
-
-CAMPOS_ATRIBUTOS = {
-    "forca",
-    "destreza",
-    "vigor",
-    "inteligencia",
-    "carisma",
-    "raciocinio",
-}
-
-
-CAMPOS_PERICIAS = {
-    "academicos",
-    "idiomas",
-    "oficios",
-    "armas_brancas",
-    "intimidacao",
-    "ocultismo",
-    "briga",
-    "investigacao",
-    "persuasao",
-    "ciencias",
-    "labia",
-    "prontidao",
-    "conhecimentos_gerais",
-    "lideranca",
-    "sobrevivencia",
-    "conducao",
-    "manha",
-    "tecnologia",
-    "esportes",
-    "medicina",
-    "mira",
-    "esquiva",
-    "furtividade",
+    "atributos": "Atributos",
+    "pericias": "Perícias",
 }
 
 
 # ============================================================
-# NOME DO FILTRO
+# NORMALIZAR REGISTRO
 # ============================================================
 
-def nome_filtro(filtro):
-
-    nomes = {
-        "tudo": "📋 Tudo",
-        "jogadores": "👤 Jogadores",
-        "npcs": "👹 NPCs",
-        "hp": "❤️ HP",
-        "mana": "🔵 Mana",
-        "xp": "✨ XP",
-        "atributos": "⚔️ Atributos",
-        "pericias": "📚 Perícias",
-    }
-
-    return nomes.get(
-        filtro,
-        "📋 Tudo"
-    )
-
-
-# ============================================================
-# ÍCONE DA AÇÃO
-# ============================================================
-
-def icone_acao(
-    acao,
-    campo
+def normalizar_registro(
+    registro
 ):
 
-    if acao == "dano":
-        return "💥"
+    if isinstance(
+        registro,
+        dict
+    ):
 
-    if acao == "cura":
-        return "💚"
+        return registro
 
-    if acao == "npc_derrotado":
-        return "💀"
+    colunas = [
+        "id",
+        "channel_id",
+        "ficha_id",
+        "ficha_nome",
+        "ficha_tipo",
+        "usuario_id",
+        "acao",
+        "campo",
+        "valor_anterior",
+        "valor_novo",
+        "descricao",
+        "criado_em",
+    ]
 
-    if acao == "mana_gasta":
-        return "🔮"
+    resultado = {}
 
-    if acao == "mana_recuperada":
-        return "💧"
+    for indice, valor in enumerate(
+        registro
+    ):
 
-    if acao == "xp":
-        return "✨"
+        if indice < len(
+            colunas
+        ):
 
-    if acao == "atributo":
-        return "⚔️"
+            resultado[
+                colunas[indice]
+            ] = valor
 
-    if acao == "pericia":
-        return "📚"
-
-    if campo in CAMPOS_ATRIBUTOS:
-        return "⚔️"
-
-    if campo in CAMPOS_PERICIAS:
-        return "📚"
-
-    return "⚙️"
+    return resultado
 
 
 # ============================================================
-# NOME DA AÇÃO
+# BUSCAR HISTÓRICO DA MESA
 # ============================================================
 
-def nome_acao(
-    acao,
-    campo
+def carregar_historico(
+    channel_id
 ):
 
-    nomes = {
-        "dano": "DANO",
-        "cura": "CURA",
-        "npc_derrotado": "NPC DERROTADO",
-        "mana_gasta": "MANA CONSUMIDA",
-        "mana_recuperada": "MANA RECUPERADA",
-        "xp": "XP ALTERADO",
-        "atributo": "ATRIBUTO ALTERADO",
-        "pericia": "PERÍCIA ALTERADA",
-        "recursos": "RECURSO ALTERADO",
-        "edicao": "FICHA EDITADA",
-    }
-
-    return nomes.get(
-        acao,
-        "ALTERAÇÃO"
+    registros = buscar_historico(
+        channel_id,
+        limite=500
     )
 
+    return [
+        normalizar_registro(
+            registro
+        )
+        for registro in registros
+    ]
+
 
 # ============================================================
-# MONTAR SQL DO FILTRO
+# APLICAR FILTRO
 # ============================================================
 
-def montar_consulta(
-    channel_id,
+def filtrar_historico(
+    registros,
     filtro
 ):
 
-    sql = """
-        SELECT
-            id,
-            ficha_id,
-            ficha_nome,
-            ficha_tipo,
-            usuario_id,
-            acao,
-            campo,
-            valor_anterior,
-            valor_novo,
-            descricao,
-            criado_em
-        FROM historico
-        WHERE channel_id = ?
-    """
+    if filtro == "tudo":
 
-    parametros = [
-        channel_id
-    ]
-
-    # ========================================================
-    # JOGADORES
-    # ========================================================
+        return registros
 
     if filtro == "jogadores":
 
-        sql += """
-            AND ficha_tipo = 'jogador'
-        """
-
-    # ========================================================
-    # NPCs
-    # ========================================================
-
-    elif filtro == "npcs":
-
-        sql += """
-            AND ficha_tipo = 'npc'
-        """
-
-    # ========================================================
-    # HP
-    # ========================================================
-
-    elif filtro == "hp":
-
-        sql += """
-            AND (
-                campo = 'hp'
-                OR campo = 'hp_atual'
-                OR campo = 'hp_max'
-                OR acao = 'dano'
-                OR acao = 'cura'
-                OR acao = 'npc_derrotado'
+        return [
+            registro
+            for registro in registros
+            if (
+                registro.get(
+                    "ficha_tipo"
+                )
+                == "jogador"
             )
-        """
+        ]
 
-    # ========================================================
-    # MANA
-    # ========================================================
+    if filtro == "npcs":
 
-    elif filtro == "mana":
-
-        sql += """
-            AND (
-                campo = 'mana'
-                OR campo = 'mana_atual'
-                OR campo = 'mana_max'
-                OR acao = 'mana_gasta'
-                OR acao = 'mana_recuperada'
+        return [
+            registro
+            for registro in registros
+            if (
+                registro.get(
+                    "ficha_tipo"
+                )
+                == "npc"
             )
-        """
+        ]
 
-    # ========================================================
-    # XP
-    # ========================================================
+    if filtro == "hp":
 
-    elif filtro == "xp":
-
-        sql += """
-            AND (
-                campo = 'xp'
-                OR acao = 'xp'
+        return [
+            registro
+            for registro in registros
+            if (
+                registro.get("campo")
+                == "hp"
+                or registro.get("acao")
+                in {
+                    "dano",
+                    "cura",
+                    "npc_derrotado",
+                }
             )
-        """
+        ]
 
-    # ========================================================
-    # ATRIBUTOS
-    # ========================================================
+    if filtro == "mana":
 
-    elif filtro == "atributos":
+        return [
+            registro
+            for registro in registros
+            if (
+                registro.get("campo")
+                == "mana"
+                or "mana"
+                in str(
+                    registro.get(
+                        "acao",
+                        ""
+                    )
+                ).lower()
+            )
+        ]
 
-        campos = sorted(
-            CAMPOS_ATRIBUTOS
-        )
+    if filtro == "xp":
 
-        marcadores = ",".join(
-            "?"
-            for _ in campos
-        )
+        return [
+            registro
+            for registro in registros
+            if (
+                registro.get("campo")
+                == "xp"
+                or registro.get("acao")
+                == "xp"
+            )
+        ]
 
-        sql += f"""
-            AND campo IN ({marcadores})
-        """
+    if filtro == "atributos":
 
-        parametros.extend(
-            campos
-        )
+        return [
+            registro
+            for registro in registros
+            if (
+                registro.get("acao")
+                == "atributo"
+                or registro.get("campo")
+                in {
+                    "forca",
+                    "destreza",
+                    "vigor",
+                    "inteligencia",
+                    "carisma",
+                    "raciocinio",
+                }
+            )
+        ]
 
-    # ========================================================
-    # PERÍCIAS
-    # ========================================================
+    if filtro == "pericias":
 
-    elif filtro == "pericias":
+        return [
+            registro
+            for registro in registros
+            if (
+                registro.get("acao")
+                == "pericia"
+            )
+        ]
 
-        campos = sorted(
-            CAMPOS_PERICIAS
-        )
-
-        marcadores = ",".join(
-            "?"
-            for _ in campos
-        )
-
-        sql += f"""
-            AND campo IN ({marcadores})
-        """
-
-        parametros.extend(
-            campos
-        )
-
-    return (
-        sql,
-        parametros
-    )
+    return registros
 
 
 # ============================================================
-# BUSCAR HISTÓRICO
+# FORMATAR DATA PARA DISCORD
 # ============================================================
 
-def buscar_historico_filtrado(
-    channel_id,
-    filtro
+def timestamp_discord(
+    valor
 ):
 
-    sql, parametros = (
-        montar_consulta(
-            channel_id,
-            filtro
-        )
-    )
+    if not valor:
 
-    sql += """
-        ORDER BY id DESC
-    """
-
-    cursor.execute(
-        sql,
-        parametros
-    )
-
-    return cursor.fetchall()
-
-
-# ============================================================
-# TOTAL DE PÁGINAS
-# ============================================================
-
-def calcular_total_paginas(
-    quantidade
-):
-
-    if quantidade <= 0:
-        return 1
-
-    return math.ceil(
-        quantidade
-        / REGISTROS_POR_PAGINA
-    )
-
-
-# ============================================================
-# HORÁRIO DO DISCORD
-# ============================================================
-
-def formatar_data_discord(
-    criado_em
-):
-
-    if criado_em is None:
-        return None
+        return "Data desconhecida"
 
     try:
 
-        texto = str(
-            criado_em
-        )
+        if isinstance(
+            valor,
+            datetime
+        ):
 
-        # SQLite CURRENT_TIMESTAMP:
-        # YYYY-MM-DD HH:MM:SS
-        data = datetime.strptime(
-            texto,
-            "%Y-%m-%d %H:%M:%S"
-        )
+            data = valor
 
-        data = data.replace(
-            tzinfo=timezone.utc
-        )
+        else:
 
-        timestamp = int(
+            texto = str(
+                valor
+            )
+
+            data = datetime.fromisoformat(
+                texto
+            )
+
+        if (
+            data.tzinfo
+            is None
+        ):
+
+            data = data.replace(
+                tzinfo=timezone.utc
+            )
+
+        unix = int(
             data.timestamp()
         )
 
         return (
-            f"<t:{timestamp}:R>"
+            f"<t:{unix}:R>"
         )
 
     except Exception:
 
         return str(
-            criado_em
+            valor
         )
 
 
 # ============================================================
-# NOME VISUAL DA FICHA
+# NOME DA FICHA
 # ============================================================
 
-def nome_visual_ficha(
-    ficha_id,
-    ficha_nome,
-    ficha_tipo
+def nome_ficha_historico(
+    registro
 ):
 
+    nome = registro.get(
+        "ficha_nome"
+    ) or "Ficha"
+
     if (
-        ficha_tipo == "npc"
-        and ficha_id is not None
+        registro.get(
+            "ficha_tipo"
+        )
+        == "npc"
     ):
 
-        return (
-            f"{ficha_nome} #{ficha_id}"
+        ficha_id = registro.get(
+            "ficha_id"
         )
 
-    return ficha_nome
+        if ficha_id is not None:
+
+            return (
+                f"{nome} #{ficha_id}"
+            )
+
+    return nome
 
 
 # ============================================================
-# FORMATAR UM REGISTRO
+# EMOJI DA AÇÃO
+# ============================================================
+
+def emoji_acao(
+    registro
+):
+
+    acao = str(
+        registro.get(
+            "acao",
+            ""
+        )
+    ).lower()
+
+    campo = str(
+        registro.get(
+            "campo",
+            ""
+        )
+    ).lower()
+
+    if (
+        acao == "dano"
+        or campo == "hp"
+        and "cura" not in acao
+    ):
+
+        return "❤️"
+
+    if acao == "cura":
+
+        return "💚"
+
+    if (
+        campo == "mana"
+        or "mana" in acao
+    ):
+
+        return "🔵"
+
+    if (
+        campo == "xp"
+        or acao == "xp"
+    ):
+
+        return "✨"
+
+    if acao == "atributo":
+
+        return "⚔️"
+
+    if acao == "pericia":
+
+        return "📚"
+
+    if acao in {
+        "npc_apagado",
+        "ficha_apagada",
+    }:
+
+        return "🗑️"
+
+    if acao == "npc_derrotado":
+
+        return "💀"
+
+    return "📝"
+
+
+# ============================================================
+# FORMATAR REGISTRO
 # ============================================================
 
 def formatar_registro(
     registro
 ):
 
-    (
-        historico_id,
-        ficha_id,
-        ficha_nome,
-        ficha_tipo,
-        usuario_id,
-        acao,
-        campo,
-        valor_anterior,
-        valor_novo,
-        descricao,
-        criado_em
-    ) = registro
-
-    emoji_tipo = (
-        "👹"
-        if ficha_tipo == "npc"
-        else "👤"
+    nome = nome_ficha_historico(
+        registro
     )
 
-    nome_visual = (
-        nome_visual_ficha(
-            ficha_id,
-            ficha_nome,
-            ficha_tipo
+    emoji = emoji_acao(
+        registro
+    )
+
+    descricao = registro.get(
+        "descricao"
+    )
+
+    campo = registro.get(
+        "campo"
+    )
+
+    anterior = registro.get(
+        "valor_anterior"
+    )
+
+    novo = registro.get(
+        "valor_novo"
+    )
+
+    usuario_id = registro.get(
+        "usuario_id"
+    )
+
+    data = timestamp_discord(
+        registro.get(
+            "criado_em"
         )
-    )
-
-    icone = icone_acao(
-        acao,
-        campo
-    )
-
-    titulo = nome_acao(
-        acao,
-        campo
     )
 
     linhas = [
-        f"{icone} **{titulo}**",
-        f"{emoji_tipo} **{nome_visual}**",
+        f"{emoji} **{nome}**"
     ]
-
-    # ========================================================
-    # VALORES
-    # ========================================================
-
-    if campo:
-
-        nome_campo = (
-            NOMES_CAMPOS.get(
-                campo,
-                campo.replace(
-                    "_",
-                    " "
-                ).title()
-            )
-        )
-
-        if (
-            valor_anterior is not None
-            and valor_novo is not None
-        ):
-
-            linhas.append(
-                f"**{nome_campo}:** "
-                f"`{valor_anterior}` → `{valor_novo}`"
-            )
-
-        elif valor_novo is not None:
-
-            linhas.append(
-                f"**{nome_campo}:** "
-                f"`{valor_novo}`"
-            )
-
-    # ========================================================
-    # DESCRIÇÃO
-    # ========================================================
 
     if descricao:
 
         linhas.append(
-            descricao
+            str(
+                descricao
+            )
         )
 
-    # ========================================================
-    # USUÁRIO
-    # ========================================================
-
-    if usuario_id is not None:
+    elif campo:
 
         linhas.append(
-            f"👤 Alterado por <@{usuario_id}>"
+            f"`{campo}` alterado."
         )
 
-    # ========================================================
-    # HORÁRIO
-    # ========================================================
-
-    horario = formatar_data_discord(
-        criado_em
-    )
-
-    if horario:
+    if (
+        anterior is not None
+        or novo is not None
+    ):
 
         linhas.append(
-            f"🕒 {horario}"
+            (
+                f"**{anterior}**"
+                f" → "
+                f"**{novo}**"
+            )
+        )
+
+    if usuario_id:
+
+        linhas.append(
+            f"👤 <@{usuario_id}> • {data}"
+        )
+
+    else:
+
+        linhas.append(
+            f"🕒 {data}"
         )
 
     return "\n".join(
@@ -578,26 +478,23 @@ def formatar_registro(
 # ============================================================
 
 def criar_embed_historico(
-    channel_id,
-    filtro,
-    pagina
+    registros,
+    pagina,
+    filtro
 ):
 
-    registros = (
-        buscar_historico_filtrado(
-            channel_id,
-            filtro
-        )
-    )
-
-    quantidade = len(
+    total = len(
         registros
     )
 
-    total_paginas = (
-        calcular_total_paginas(
-            quantidade
+    total_paginas = max(
+        1,
+        (
+            total
+            + ITENS_POR_PAGINA
+            - 1
         )
+        // ITENS_POR_PAGINA
     )
 
     pagina = max(
@@ -608,72 +505,183 @@ def criar_embed_historico(
         )
     )
 
-    inicio = (
-        pagina
-        * REGISTROS_POR_PAGINA
-    )
-
-    fim = (
-        inicio
-        + REGISTROS_POR_PAGINA
-    )
-
-    registros_pagina = (
-        registros[
-            inicio:fim
-        ]
-    )
-
     embed = discord.Embed(
         title="📜 HISTÓRICO DA MESA",
         color=discord.Color.dark_red()
     )
 
-    embed.add_field(
-        name="🔎 Filtro",
-        value=nome_filtro(
-            filtro
-        ),
-        inline=False
+    embed.description = (
+        f"🔎 Filtro: "
+        f"**{FILTROS.get(filtro, 'Tudo')}**\n"
+        f"📄 Página: "
+        f"**{pagina + 1}/{total_paginas}**\n"
+        f"📝 Registros: **{total}**"
     )
 
-    if not registros_pagina:
+    if total == 0:
 
-        embed.description = (
-            "📭 Nenhuma alteração encontrada."
+        embed.add_field(
+            name="Nenhum registro",
+            value=(
+                "Não há alterações registradas "
+                "para este filtro."
+            ),
+            inline=False
         )
 
-    else:
+        return embed
 
-        blocos = []
+    inicio = (
+        pagina
+        * ITENS_POR_PAGINA
+    )
 
-        for registro in registros_pagina:
+    fim = (
+        inicio
+        + ITENS_POR_PAGINA
+    )
 
-            blocos.append(
-                formatar_registro(
-                    registro
-                )
-            )
+    pagina_registros = registros[
+        inicio:fim
+    ]
 
-        embed.description = (
-            "\n\n"
-            "━━━━━━━━━━━━━━━━━━\n\n"
-        ).join(
-            blocos
+    for registro in pagina_registros:
+
+        embed.add_field(
+            name="\u200b",
+            value=formatar_registro(
+                registro
+            ),
+            inline=False
         )
 
     embed.set_footer(
         text=(
-            f"Página {pagina + 1}/{total_paginas} "
-            f"• {quantidade} registro(s)"
+            "Registros mais recentes primeiro"
         )
     )
 
-    return (
-        embed,
-        total_paginas,
-        pagina
-    )
+    return embed
+
+
+# ============================================================
+# SELECT DE FILTRO
+# ============================================================
+
+class HistoricoFiltroSelect(
+    discord.ui.Select
+):
+
+    def __init__(
+        self,
+        view_historico
+    ):
+
+        self.view_historico = (
+            view_historico
+        )
+
+        options = [
+            discord.SelectOption(
+                label="Tudo",
+                value="tudo",
+                emoji="📜",
+                default=(
+                    view_historico.filtro
+                    == "tudo"
+                )
+            ),
+            discord.SelectOption(
+                label="Jogadores",
+                value="jogadores",
+                emoji="👤",
+                default=(
+                    view_historico.filtro
+                    == "jogadores"
+                )
+            ),
+            discord.SelectOption(
+                label="NPCs",
+                value="npcs",
+                emoji="👹",
+                default=(
+                    view_historico.filtro
+                    == "npcs"
+                )
+            ),
+            discord.SelectOption(
+                label="HP",
+                value="hp",
+                emoji="❤️",
+                default=(
+                    view_historico.filtro
+                    == "hp"
+                )
+            ),
+            discord.SelectOption(
+                label="Mana",
+                value="mana",
+                emoji="🔵",
+                default=(
+                    view_historico.filtro
+                    == "mana"
+                )
+            ),
+            discord.SelectOption(
+                label="XP",
+                value="xp",
+                emoji="✨",
+                default=(
+                    view_historico.filtro
+                    == "xp"
+                )
+            ),
+            discord.SelectOption(
+                label="Atributos",
+                value="atributos",
+                emoji="⚔️",
+                default=(
+                    view_historico.filtro
+                    == "atributos"
+                )
+            ),
+            discord.SelectOption(
+                label="Perícias",
+                value="pericias",
+                emoji="📚",
+                default=(
+                    view_historico.filtro
+                    == "pericias"
+                )
+            ),
+        ]
+
+        super().__init__(
+            placeholder=(
+                "Filtrar histórico..."
+            ),
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        self.view_historico.filtro = (
+            self.values[0]
+        )
+
+        self.view_historico.pagina = 0
+
+        self.view_historico.recarregar()
+
+        await self.view_historico.editar(
+            interaction
+        )
 
 
 # ============================================================
@@ -687,8 +695,7 @@ class HistoricoView(
     def __init__(
         self,
         channel_id,
-        autor_id,
-        filtro
+        usuario_id
     ):
 
         super().__init__(
@@ -699,62 +706,21 @@ class HistoricoView(
             channel_id
         )
 
-        self.autor_id = (
-            autor_id
+        self.usuario_id = (
+            usuario_id
         )
 
-        self.filtro = (
-            filtro
-        )
-
+        self.filtro = "tudo"
         self.pagina = 0
 
-        self.total_paginas = 1
+        self.todos_registros = []
+        self.registros = []
 
-        self.atualizar_estado()
-
-
-    # ========================================================
-    # ATUALIZAR TOTAL
-    # ========================================================
-
-    def atualizar_estado(
-        self
-    ):
-
-        registros = (
-            buscar_historico_filtrado(
-                self.channel_id,
-                self.filtro
-            )
-        )
-
-        self.total_paginas = (
-            calcular_total_paginas(
-                len(registros)
-            )
-        )
-
-        self.pagina = max(
-            0,
-            min(
-                self.pagina,
-                self.total_paginas - 1
-            )
-        )
-
-        self.anterior.disabled = (
-            self.pagina <= 0
-        )
-
-        self.proxima.disabled = (
-            self.pagina
-            >= self.total_paginas - 1
-        )
+        self.recarregar()
 
 
     # ========================================================
-    # SOMENTE AUTOR
+    # CONTROLE DE USUÁRIO
     # ========================================================
 
     async def interaction_check(
@@ -764,12 +730,12 @@ class HistoricoView(
 
         if (
             interaction.user.id
-            != self.autor_id
+            != self.usuario_id
         ):
 
             await interaction.response.send_message(
                 "❌ Somente quem abriu o histórico "
-                "pode usar estes botões.",
+                "pode usar estes controles.",
                 ephemeral=True
             )
 
@@ -779,31 +745,141 @@ class HistoricoView(
 
 
     # ========================================================
-    # ATUALIZAR MENSAGEM
+    # TOTAL DE PÁGINAS
     # ========================================================
 
-    async def atualizar_mensagem(
+    def total_paginas(
+        self
+    ):
+
+        if not self.registros:
+
+            return 1
+
+        return (
+            len(self.registros)
+            + ITENS_POR_PAGINA
+            - 1
+        ) // ITENS_POR_PAGINA
+
+
+    # ========================================================
+    # RECARREGAR
+    # ========================================================
+
+    def recarregar(
+        self
+    ):
+
+        self.todos_registros = (
+            carregar_historico(
+                self.channel_id
+            )
+        )
+
+        self.registros = (
+            filtrar_historico(
+                self.todos_registros,
+                self.filtro
+            )
+        )
+
+        total_paginas = (
+            self.total_paginas()
+        )
+
+        if (
+            self.pagina
+            >= total_paginas
+        ):
+
+            self.pagina = max(
+                0,
+                total_paginas - 1
+            )
+
+        self.reconstruir()
+
+
+    # ========================================================
+    # RECONSTRUIR
+    # ========================================================
+
+    def reconstruir(
+        self
+    ):
+
+        self.clear_items()
+
+        self.add_item(
+            HistoricoFiltroSelect(
+                self
+            )
+        )
+
+        anterior = discord.ui.Button(
+            label="◀ Anterior",
+            style=discord.ButtonStyle.secondary,
+            disabled=(
+                self.pagina <= 0
+            )
+        )
+
+        proxima = discord.ui.Button(
+            label="Próxima ▶",
+            style=discord.ButtonStyle.secondary,
+            disabled=(
+                self.pagina
+                >= self.total_paginas() - 1
+            )
+        )
+
+        atualizar = discord.ui.Button(
+            label="Atualizar",
+            emoji="🔄",
+            style=discord.ButtonStyle.primary
+        )
+
+        anterior.callback = (
+            self.ir_anterior
+        )
+
+        proxima.callback = (
+            self.ir_proxima
+        )
+
+        atualizar.callback = (
+            self.atualizar
+        )
+
+        self.add_item(
+            anterior
+        )
+
+        self.add_item(
+            proxima
+        )
+
+        self.add_item(
+            atualizar
+        )
+
+
+    # ========================================================
+    # EDITAR
+    # ========================================================
+
+    async def editar(
         self,
         interaction
     ):
 
-        self.atualizar_estado()
-
-        embed, total, pagina = (
-            criar_embed_historico(
-                self.channel_id,
-                self.filtro,
-                self.pagina
-            )
-        )
-
-        self.total_paginas = total
-        self.pagina = pagina
-
-        self.atualizar_estado()
-
         await interaction.response.edit_message(
-            embed=embed,
+            embed=criar_embed_historico(
+                self.registros,
+                self.pagina,
+                self.filtro
+            ),
             view=self
         )
 
@@ -812,21 +888,18 @@ class HistoricoView(
     # ANTERIOR
     # ========================================================
 
-    @discord.ui.button(
-        label="◀ Anterior",
-        style=discord.ButtonStyle.secondary
-    )
-    async def anterior(
+    async def ir_anterior(
         self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
+        interaction
     ):
 
         if self.pagina > 0:
 
             self.pagina -= 1
 
-        await self.atualizar_mensagem(
+        self.reconstruir()
+
+        await self.editar(
             interaction
         )
 
@@ -835,30 +908,43 @@ class HistoricoView(
     # PRÓXIMA
     # ========================================================
 
-    @discord.ui.button(
-        label="Próxima ▶",
-        style=discord.ButtonStyle.secondary
-    )
-    async def proxima(
+    async def ir_proxima(
         self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
+        interaction
     ):
 
         if (
             self.pagina
-            < self.total_paginas - 1
+            < self.total_paginas() - 1
         ):
 
             self.pagina += 1
 
-        await self.atualizar_mensagem(
+        self.reconstruir()
+
+        await self.editar(
+            interaction
+        )
+
+
+    # ========================================================
+    # ATUALIZAR
+    # ========================================================
+
+    async def atualizar(
+        self,
+        interaction
+    ):
+
+        self.recarregar()
+
+        await self.editar(
             interaction
         )
 
 
 # ============================================================
-# REGISTRAR COMANDOS
+# REGISTRAR COMANDO
 # ============================================================
 
 def registrar_comandos_historico(
@@ -869,99 +955,33 @@ def registrar_comandos_historico(
         name="historico",
         description="Mostra o histórico de alterações da mesa."
     )
-    @app_commands.describe(
-        filtro="Escolha quais alterações deseja visualizar"
-    )
-    @app_commands.choices(
-        filtro=[
-            app_commands.Choice(
-                name="📋 Tudo",
-                value="tudo"
-            ),
-            app_commands.Choice(
-                name="👤 Jogadores",
-                value="jogadores"
-            ),
-            app_commands.Choice(
-                name="👹 NPCs",
-                value="npcs"
-            ),
-            app_commands.Choice(
-                name="❤️ HP",
-                value="hp"
-            ),
-            app_commands.Choice(
-                name="🔵 Mana",
-                value="mana"
-            ),
-            app_commands.Choice(
-                name="✨ XP",
-                value="xp"
-            ),
-            app_commands.Choice(
-                name="⚔️ Atributos",
-                value="atributos"
-            ),
-            app_commands.Choice(
-                name="📚 Perícias",
-                value="pericias"
-            ),
-        ]
-    )
     async def historico(
-        interaction: discord.Interaction,
-        filtro: app_commands.Choice[str] = None
+        interaction: discord.Interaction
     ):
 
-        if interaction.channel is None:
+        if not pode_ver_historico(
+            interaction
+        ):
 
             await interaction.response.send_message(
-                "❌ Este comando precisa ser usado "
-                "em um canal da mesa.",
+                "❌ Somente o Mestre ou um administrador "
+                "pode consultar o histórico da mesa.",
                 ephemeral=True
             )
 
             return
-
-        filtro_escolhido = (
-            filtro.value
-            if filtro is not None
-            else "tudo"
-        )
-
-        registros = (
-            buscar_historico_filtrado(
-                interaction.channel.id,
-                filtro_escolhido
-            )
-        )
-
-        if not registros:
-
-            await interaction.response.send_message(
-                "📭 Ainda não existem registros "
-                "para esse filtro.",
-                ephemeral=True
-            )
-
-            return
-
-        embed, total, pagina = (
-            criar_embed_historico(
-                interaction.channel.id,
-                filtro_escolhido,
-                0
-            )
-        )
 
         view = HistoricoView(
             interaction.channel.id,
-            interaction.user.id,
-            filtro_escolhido
+            interaction.user.id
         )
 
         await interaction.response.send_message(
-            embed=embed,
+            embed=criar_embed_historico(
+                view.registros,
+                view.pagina,
+                view.filtro
+            ),
             view=view,
             ephemeral=True
         )
