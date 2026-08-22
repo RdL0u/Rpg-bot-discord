@@ -16,6 +16,10 @@ from comando.painel import (
     registrar_comandos_painel
 )
 
+from comando.historico import (
+    registrar_comandos_historico
+)
+
 
 # ============================================================
 # BOT
@@ -42,6 +46,10 @@ registrar_comandos_mestre(
 )
 
 registrar_comandos_painel(
+    bot
+)
+
+registrar_comandos_historico(
     bot
 )
 
@@ -78,28 +86,35 @@ async def on_ready():
 
 @bot.tree.command(
     name="help",
-    description="Mostra os comandos do bot."
+    description="Mostra os comandos disponíveis do bot."
 )
 async def help(
     interaction: discord.Interaction
 ):
 
     embed = discord.Embed(
-        title="📖 BotRPG",
-        description="Comandos disponíveis:",
+        title="📖 COMANDOS DO BOT",
+        description=(
+            "Lista dos principais comandos disponíveis "
+            "para a mesa de RPG."
+        ),
         color=discord.Color.dark_red()
     )
+
+    # ========================================================
+    # JOGADOR
+    # ========================================================
 
     embed.add_field(
         name="👤 Jogador",
         value=(
-            "`/criarficha` — Criar ficha\n"
-            "`/ficha` — Ver sua ficha\n"
-            "`/verficha` — Ver ficha de outro jogador\n"
-            "`/atributo` — Alterar atributo\n"
-            "`/pericia` — Alterar perícia\n"
-            "`/alterarficha` — Alterar HP/Mana\n"
-            "`/apagarficha` — Apagar ficha\n"
+            "`/criarficha` — Criar sua ficha\n"
+            "`/ficha` — Visualizar sua própria ficha\n"
+            "`/verficha` — Visualizar ficha de outro jogador\n"
+            "`/atributo` — Alterar um atributo\n"
+            "`/pericia` — Alterar uma perícia\n"
+            "`/alterarficha` — Alterar HP e Mana máximos\n"
+            "`/apagarficha` — Apagar sua ficha\n"
             "`/dano` — Aplicar dano\n"
             "`/cura` — Recuperar HP\n"
             "`/gastarmana` — Gastar Mana\n"
@@ -109,37 +124,52 @@ async def help(
         inline=False
     )
 
+    # ========================================================
+    # MESA
+    # ========================================================
+
     embed.add_field(
         name="📋 Mesa",
         value=(
-            "`/painel` — Ver jogadores e NPCs "
-            "ativos da mesa"
+            "`/painel` — Ver fichas ativas da mesa\n"
+            "`/historico` — Ver histórico de alterações"
         ),
         inline=False
     )
+
+    # ========================================================
+    # MESTRE
+    # ========================================================
 
     embed.add_field(
         name="👑 Mestre",
         value=(
             "`/criarnpc` — Criar NPC\n"
-            "`/npcs` — Gerenciar/visualizar NPCs\n"
+            "`/npcs` — Ver NPCs da mesa\n"
             "`/apagarnpc` — Apagar NPC\n"
-            "`/passarmestre` — Passar Mestre\n"
-            "`/mestre` — Ver Mestre"
+            "`/passarmestre` — Passar o cargo de Mestre\n"
+            "`/mestre` — Ver quem é o Mestre"
         ),
         inline=False
     )
 
+    # ========================================================
+    # ADMINISTRAÇÃO
+    # ========================================================
+
     embed.add_field(
-        name="🛡️ Administrador",
+        name="🛡️ Administração",
         value=(
-            "`/definirmestre` — Definir Mestre"
+            "`/definirmestre` — Definir o Mestre do canal"
         ),
         inline=False
     )
 
     embed.set_footer(
-        text="BotRPG • Sistema de fichas"
+        text=(
+            "Use / seguido do nome do comando "
+            "para visualizar suas opções."
+        )
     )
 
     await interaction.response.send_message(
