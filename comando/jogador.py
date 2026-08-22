@@ -6,7 +6,6 @@ from database import (
     db,
     cursor,
     garantir_mesa,
-    obter_mestre,
     buscar_ficha_jogador,
     registrar_historico,
 )
@@ -15,7 +14,6 @@ from fichas import (
     transformar_ficha,
     criar_pagina_status,
     FichaView,
-    pode_alterar_ficha,
     estado_hp,
     estado_mana,
 )
@@ -24,6 +22,15 @@ from config import (
     ATRIBUTOS,
     PERICIAS,
     ORDEM_PERICIAS,
+)
+
+from comando.permissoes import (
+    pode_alterar_ficha,
+    pode_alterar_propria_ficha,
+    pode_alterar_recursos,
+    pode_alterar_atributos,
+    pode_alterar_pericias,
+    pode_alterar_xp,
 )
 
 
@@ -70,43 +77,6 @@ GRUPOS_PERICIAS_JOGADOR = [
     ORDEM_PERICIAS[15:20],
     ORDEM_PERICIAS[20:23],
 ]
-
-
-# ============================================================
-# ADMIN
-# ============================================================
-
-def eh_admin(
-    interaction
-):
-
-    if interaction.guild is None:
-        return False
-
-    return (
-        interaction.user
-        .guild_permissions
-        .administrator
-    )
-
-
-# ============================================================
-# MESTRE
-# ============================================================
-
-def eh_mestre(
-    interaction
-):
-
-    if interaction.channel is None:
-        return False
-
-    return (
-        obter_mestre(
-            interaction.channel.id
-        )
-        == interaction.user.id
-    )
 
 
 # ============================================================
@@ -207,10 +177,6 @@ async def finalizar_criacao_jogador(
     sessao
 ):
 
-    # ========================================================
-    # VERIFICAR SE JÁ EXISTE FICHA
-    # ========================================================
-
     existente = buscar_ficha_jogador(
         sessao.channel_id,
         sessao.usuario_id
@@ -224,10 +190,6 @@ async def finalizar_criacao_jogador(
         )
 
         return
-
-    # ========================================================
-    # VALIDAR DADOS BÁSICOS
-    # ========================================================
 
     if not sessao.nome:
 
@@ -416,10 +378,6 @@ async def finalizar_criacao_jogador(
 
     ficha_id = cursor.lastrowid
 
-    # ========================================================
-    # CALCULAR RC
-    # ========================================================
-
     rc = (
         sessao.pericias[
             "esquiva"
@@ -431,10 +389,6 @@ async def finalizar_criacao_jogador(
         +
         5
     )
-
-    # ========================================================
-    # MENSAGEM FINAL
-    # ========================================================
 
     await interaction.response.send_message(
         f"📜 Ficha de **{nome}** "
@@ -703,6 +657,7 @@ class ModalAtributosJogador(
                 )
 
                 if valor < 0:
+
                     raise ValueError
 
                 valores[
@@ -1214,6 +1169,24 @@ def registrar_comandos_jogador(
 
             return
 
+        f = transformar_ficha(
+            dados
+        )
+
+        if not pode_alterar_atributos(
+            interaction,
+            f
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não possui permissão "
+                "para alterar os atributos "
+                "desta ficha.",
+                ephemeral=True
+            )
+
+            return
+
         if valor < 0:
 
             await interaction.response.send_message(
@@ -1222,10 +1195,6 @@ def registrar_comandos_jogador(
             )
 
             return
-
-        f = transformar_ficha(
-            dados
-        )
 
         valor_anterior = f[
             atributo.value
@@ -1286,98 +1255,32 @@ def registrar_comandos_jogador(
     )
     @app_commands.choices(
         pericia=[
-            app_commands.Choice(
-                name="Acadêmicos",
-                value="academicos"
-            ),
-            app_commands.Choice(
-                name="Idiomas",
-                value="idiomas"
-            ),
-            app_commands.Choice(
-                name="Ofícios",
-                value="oficios"
-            ),
-            app_commands.Choice(
-                name="Armas Brancas",
-                value="armas_brancas"
-            ),
-            app_commands.Choice(
-                name="Intimidação",
-                value="intimidacao"
-            ),
-            app_commands.Choice(
-                name="Ocultismo",
-                value="ocultismo"
-            ),
-            app_commands.Choice(
-                name="Briga",
-                value="briga"
-            ),
-            app_commands.Choice(
-                name="Investigação",
-                value="investigacao"
-            ),
-            app_commands.Choice(
-                name="Persuasão",
-                value="persuasao"
-            ),
-            app_commands.Choice(
-                name="Ciências",
-                value="ciencias"
-            ),
-            app_commands.Choice(
-                name="Lábia",
-                value="labia"
-            ),
-            app_commands.Choice(
-                name="Prontidão",
-                value="prontidao"
-            ),
+            app_commands.Choice(name="Acadêmicos", value="academicos"),
+            app_commands.Choice(name="Idiomas", value="idiomas"),
+            app_commands.Choice(name="Ofícios", value="oficios"),
+            app_commands.Choice(name="Armas Brancas", value="armas_brancas"),
+            app_commands.Choice(name="Intimidação", value="intimidacao"),
+            app_commands.Choice(name="Ocultismo", value="ocultismo"),
+            app_commands.Choice(name="Briga", value="briga"),
+            app_commands.Choice(name="Investigação", value="investigacao"),
+            app_commands.Choice(name="Persuasão", value="persuasao"),
+            app_commands.Choice(name="Ciências", value="ciencias"),
+            app_commands.Choice(name="Lábia", value="labia"),
+            app_commands.Choice(name="Prontidão", value="prontidao"),
             app_commands.Choice(
                 name="Conhecimentos Gerais",
                 value="conhecimentos_gerais"
             ),
-            app_commands.Choice(
-                name="Liderança",
-                value="lideranca"
-            ),
-            app_commands.Choice(
-                name="Sobrevivência",
-                value="sobrevivencia"
-            ),
-            app_commands.Choice(
-                name="Condução",
-                value="conducao"
-            ),
-            app_commands.Choice(
-                name="Manha",
-                value="manha"
-            ),
-            app_commands.Choice(
-                name="Tecnologia",
-                value="tecnologia"
-            ),
-            app_commands.Choice(
-                name="Esportes",
-                value="esportes"
-            ),
-            app_commands.Choice(
-                name="Medicina",
-                value="medicina"
-            ),
-            app_commands.Choice(
-                name="Mira",
-                value="mira"
-            ),
-            app_commands.Choice(
-                name="Esquiva",
-                value="esquiva"
-            ),
-            app_commands.Choice(
-                name="Furtividade",
-                value="furtividade"
-            ),
+            app_commands.Choice(name="Liderança", value="lideranca"),
+            app_commands.Choice(name="Sobrevivência", value="sobrevivencia"),
+            app_commands.Choice(name="Condução", value="conducao"),
+            app_commands.Choice(name="Manha", value="manha"),
+            app_commands.Choice(name="Tecnologia", value="tecnologia"),
+            app_commands.Choice(name="Esportes", value="esportes"),
+            app_commands.Choice(name="Medicina", value="medicina"),
+            app_commands.Choice(name="Mira", value="mira"),
+            app_commands.Choice(name="Esquiva", value="esquiva"),
+            app_commands.Choice(name="Furtividade", value="furtividade"),
         ]
     )
     async def pericia(
@@ -1400,6 +1303,24 @@ def registrar_comandos_jogador(
 
             return
 
+        f = transformar_ficha(
+            dados
+        )
+
+        if not pode_alterar_pericias(
+            interaction,
+            f
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não possui permissão "
+                "para alterar as perícias "
+                "desta ficha.",
+                ephemeral=True
+            )
+
+            return
+
         if (
             valor < 0
             or valor > 5
@@ -1412,10 +1333,6 @@ def registrar_comandos_jogador(
             )
 
             return
-
-        f = transformar_ficha(
-            dados
-        )
 
         valor_anterior = f[
             pericia.value
@@ -1500,7 +1417,7 @@ def registrar_comandos_jogador(
             dados
         )
 
-        if not pode_alterar_ficha(
+        if not pode_alterar_recursos(
             interaction,
             f
         ):
@@ -1577,9 +1494,7 @@ def registrar_comandos_jogador(
                 campo="hp",
                 valor_anterior=hp_anterior,
                 valor_novo=novo_hp,
-                descricao=(
-                    "❤️ HP alterado."
-                )
+                descricao="❤️ HP alterado."
             )
 
         if mana_anterior != nova_mana:
@@ -1594,9 +1509,7 @@ def registrar_comandos_jogador(
                 campo="mana",
                 valor_anterior=mana_anterior,
                 valor_novo=nova_mana,
-                descricao=(
-                    "🔵 Mana alterada."
-                )
+                descricao="🔵 Mana alterada."
             )
 
         await interaction.response.send_message(
@@ -1636,9 +1549,18 @@ def registrar_comandos_jogador(
             dados
         )
 
-        # ====================================================
-        # CONFIRMAÇÃO
-        # ====================================================
+        if not pode_alterar_propria_ficha(
+            interaction,
+            f
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não possui permissão "
+                "para apagar esta ficha.",
+                ephemeral=True
+            )
+
+            return
 
         class ConfirmarApagarFichaView(
             discord.ui.View
@@ -1672,10 +1594,6 @@ def registrar_comandos_jogador(
                 return True
 
 
-            # ================================================
-            # CONFIRMAR
-            # ================================================
-
             @discord.ui.button(
                 label="Sim, apagar",
                 emoji="🗑️",
@@ -1697,9 +1615,7 @@ def registrar_comandos_jogador(
                 if dados_atualizados is None:
 
                     await nova_interaction.response.edit_message(
-                        content=(
-                            "❌ A ficha não existe mais."
-                        ),
+                        content="❌ A ficha não existe mais.",
                         view=None
                     )
 
@@ -1710,6 +1626,23 @@ def registrar_comandos_jogador(
                 ficha_atual = transformar_ficha(
                     dados_atualizados
                 )
+
+                if not pode_alterar_propria_ficha(
+                    nova_interaction,
+                    ficha_atual
+                ):
+
+                    await nova_interaction.response.edit_message(
+                        content=(
+                            "❌ Você não possui permissão "
+                            "para apagar esta ficha."
+                        ),
+                        view=None
+                    )
+
+                    self.stop()
+
+                    return
 
                 cursor.execute("""
                     DELETE FROM fichas
@@ -1746,10 +1679,6 @@ def registrar_comandos_jogador(
 
                 self.stop()
 
-
-            # ================================================
-            # CANCELAR
-            # ================================================
 
             @discord.ui.button(
                 label="Cancelar",
@@ -1814,17 +1743,11 @@ def registrar_comandos_jogador(
                 interaction_original.channel.id,
             ))
 
-            resultados = (
-                cursor.fetchall()
-            )
+            resultados = cursor.fetchall()
 
             opcoes = []
 
-            for (
-                ficha_id,
-                nome,
-                tipo
-            ) in resultados:
+            for ficha_id, nome, tipo in resultados:
 
                 if tipo == "npc":
 
@@ -1948,12 +1871,10 @@ def registrar_comandos_jogador(
                 title=titulo
             )
 
-            self.valor = (
-                discord.ui.TextInput(
-                    label="Valor",
-                    placeholder="Digite um número",
-                    required=True
-                )
+            self.valor = discord.ui.TextInput(
+                label="Valor",
+                placeholder="Digite um número",
+                required=True
             )
 
             self.add_item(
@@ -2014,9 +1935,9 @@ def registrar_comandos_jogador(
 
             if self.acao == "dano":
 
-                hp_anterior = (
-                    f["hp_atual"]
-                )
+                hp_anterior = f[
+                    "hp_atual"
+                ]
 
                 novo_hp = max(
                     0,
@@ -2102,9 +2023,9 @@ def registrar_comandos_jogador(
 
             if self.acao == "cura":
 
-                hp_anterior = (
-                    f["hp_atual"]
-                )
+                hp_anterior = f[
+                    "hp_atual"
+                ]
 
                 novo_hp = min(
                     f["hp_max"],
@@ -2165,9 +2086,9 @@ def registrar_comandos_jogador(
                 == "recuperarmana"
             ):
 
-                mana_anterior = (
-                    f["mana_atual"]
-                )
+                mana_anterior = f[
+                    "mana_atual"
+                ]
 
                 nova_mana = min(
                     f["mana_max"],
@@ -2369,6 +2290,23 @@ def registrar_comandos_jogador(
 
             return
 
+        f = transformar_ficha(
+            dados
+        )
+
+        if not pode_alterar_recursos(
+            interaction,
+            f
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não possui permissão "
+                "para alterar a Mana desta ficha.",
+                ephemeral=True
+            )
+
+            return
+
         if valor <= 0:
 
             await interaction.response.send_message(
@@ -2377,10 +2315,6 @@ def registrar_comandos_jogador(
             )
 
             return
-
-        f = transformar_ficha(
-            dados
-        )
 
         if valor > f[
             "mana_atual"
@@ -2393,9 +2327,9 @@ def registrar_comandos_jogador(
 
             return
 
-        mana_anterior = (
-            f["mana_atual"]
-        )
+        mana_anterior = f[
+            "mana_atual"
+        ]
 
         nova_mana = (
             mana_anterior
@@ -2472,14 +2406,14 @@ def registrar_comandos_jogador(
             dados
         )
 
-        if not pode_alterar_ficha(
+        if not pode_alterar_xp(
             interaction,
             f
         ):
 
             await interaction.response.send_message(
                 "❌ Você não possui permissão "
-                "para alterar esta ficha.",
+                "para alterar o XP desta ficha.",
                 ephemeral=True
             )
 
@@ -2495,9 +2429,9 @@ def registrar_comandos_jogador(
 
             return
 
-        xp_anterior = (
-            f["xp"]
-        )
+        xp_anterior = f[
+            "xp"
+        ]
 
         novo_xp = (
             xp_anterior
