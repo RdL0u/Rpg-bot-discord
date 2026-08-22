@@ -1,19 +1,106 @@
 import discord
 
-from discord import app_commands
-
 from backup import (
     criar_backup,
-    listar_info_backups,
+    listar_backups,
 )
 
 from comando.permissoes import (
-    eh_admin,
+    pode_criar_backup,
+    pode_visualizar_backups,
 )
 
 
 # ============================================================
-# REGISTRAR COMANDOS DE BACKUP
+# FORMATAR TAMANHO
+# ============================================================
+
+def formatar_tamanho(
+    tamanho
+):
+
+    tamanho = float(
+        tamanho
+    )
+
+    unidades = [
+        "B",
+        "KB",
+        "MB",
+        "GB",
+    ]
+
+    indice = 0
+
+    while (
+        tamanho >= 1024
+        and indice
+        < len(unidades) - 1
+    ):
+
+        tamanho /= 1024
+
+        indice += 1
+
+    if indice == 0:
+
+        return (
+            f"{int(tamanho)} "
+            f"{unidades[indice]}"
+        )
+
+    return (
+        f"{tamanho:.2f} "
+        f"{unidades[indice]}"
+    )
+
+
+# ============================================================
+# EXTRAIR INFORMAÇÕES DO BACKUP
+# ============================================================
+
+def obter_info_backup(
+    backup
+):
+
+    if hasattr(
+        backup,
+        "name"
+    ):
+
+        nome = backup.name
+
+    else:
+
+        nome = str(
+            backup
+        )
+
+    tamanho = None
+
+    try:
+
+        if hasattr(
+            backup,
+            "stat"
+        ):
+
+            tamanho = (
+                backup.stat().st_size
+            )
+
+    except Exception:
+
+        tamanho = None
+
+    return (
+        nome,
+        tamanho
+    )
+
+
+# ============================================================
+# REGISTRAR COMANDOS
 # ============================================================
 
 def registrar_comandos_backup(
@@ -21,7 +108,7 @@ def registrar_comandos_backup(
 ):
 
     # ========================================================
-    # CRIAR BACKUP MANUAL
+    # CRIAR BACKUP
     # ========================================================
 
     @bot.tree.command(
@@ -32,25 +119,17 @@ def registrar_comandos_backup(
         interaction: discord.Interaction
     ):
 
-        # ====================================================
-        # APENAS ADMINISTRADORES
-        # ====================================================
-
-        if not eh_admin(
+        if not pode_criar_backup(
             interaction
         ):
 
             await interaction.response.send_message(
-                "❌ Somente administradores podem "
-                "criar backups manualmente.",
+                "❌ Somente administradores "
+                "podem criar backups.",
                 ephemeral=True
             )
 
             return
-
-        # ====================================================
-        # DEFER
-        # ====================================================
 
         await interaction.response.defer(
             ephemeral=True
@@ -58,59 +137,60 @@ def registrar_comandos_backup(
 
         try:
 
-            caminho_backup = criar_backup()
+            caminho = criar_backup()
 
         except Exception as erro:
 
             await interaction.followup.send(
-                "❌ Não foi possível criar o backup.\n\n"
-                f"Erro: `{erro}`",
+                (
+                    "❌ Não foi possível criar "
+                    "o backup.\n\n"
+                    f"`{erro}`"
+                ),
                 ephemeral=True
             )
 
             return
 
-        tamanho = (
-            caminho_backup.stat().st_size
+        nome = getattr(
+            caminho,
+            "name",
+            str(caminho)
         )
 
-        # ====================================================
-        # FORMATAR TAMANHO
-        # ====================================================
+        tamanho = None
 
-        if tamanho < 1024:
+        try:
 
-            tamanho_formatado = (
-                f"{tamanho} B"
+            tamanho = (
+                caminho.stat().st_size
             )
 
-        elif tamanho < (
-            1024 * 1024
-        ):
+        except Exception:
 
-            tamanho_formatado = (
-                f"{tamanho / 1024:.2f} KB"
+            pass
+
+        mensagem = (
+            "✅ **Backup criado com sucesso!**\n\n"
+            f"💾 Arquivo: `{nome}`"
+        )
+
+        if tamanho is not None:
+
+            mensagem += (
+                "\n"
+                f"📦 Tamanho: "
+                f"**{formatar_tamanho(tamanho)}**"
             )
 
-        elif tamanho < (
-            1024 * 1024 * 1024
-        ):
-
-            tamanho_formatado = (
-                f"{tamanho / (1024 * 1024):.2f} MB"
-            )
-
-        else:
-
-            tamanho_formatado = (
-                f"{tamanho / (1024 * 1024 * 1024):.2f} GB"
-            )
+        mensagem += (
+            "\n\n"
+            "🔒 O backup permanece armazenado "
+            "localmente no servidor do bot."
+        )
 
         await interaction.followup.send(
-            "✅ **Backup criado com sucesso!**\n\n"
-            f"📁 Arquivo: `{caminho_backup.name}`\n"
-            f"💾 Tamanho: **{tamanho_formatado}**\n"
-            f"🔒 Integridade: **OK**",
+            mensagem,
             ephemeral=True
         )
 
@@ -121,136 +201,101 @@ def registrar_comandos_backup(
 
     @bot.tree.command(
         name="backups",
-        description="Mostra os backups disponíveis."
+        description="Lista os backups disponíveis."
     )
     async def backups(
         interaction: discord.Interaction
     ):
 
-        # ====================================================
-        # APENAS ADMINISTRADORES
-        # ====================================================
-
-        if not eh_admin(
+        if not pode_visualizar_backups(
             interaction
         ):
 
             await interaction.response.send_message(
-                "❌ Somente administradores podem "
-                "visualizar os backups.",
+                "❌ Somente administradores "
+                "podem visualizar os backups.",
                 ephemeral=True
             )
 
             return
-
-        await interaction.response.defer(
-            ephemeral=True
-        )
 
         try:
 
-            backups_disponiveis = (
-                listar_info_backups()
-            )
+            lista = listar_backups()
 
         except Exception as erro:
 
-            await interaction.followup.send(
-                "❌ Não foi possível listar os backups.\n\n"
-                f"Erro: `{erro}`",
+            await interaction.response.send_message(
+                (
+                    "❌ Não foi possível listar "
+                    "os backups.\n\n"
+                    f"`{erro}`"
+                ),
                 ephemeral=True
             )
 
             return
 
-        if not backups_disponiveis:
+        if not lista:
 
-            await interaction.followup.send(
-                "📦 Nenhum backup foi criado ainda.",
+            await interaction.response.send_message(
+                "💾 Nenhum backup foi encontrado.",
                 ephemeral=True
             )
 
             return
 
-        # ====================================================
-        # EMBED
-        # ====================================================
+        # Exibir somente os 10 mais recentes
+        lista = lista[:10]
 
-        embed = discord.Embed(
-            title="💾 BACKUPS DO BOT",
-            description=(
-                f"Backups disponíveis: "
-                f"**{len(backups_disponiveis)}**"
-            ),
-            color=discord.Color.blue()
-        )
+        linhas = []
 
-        # ====================================================
-        # MOSTRAR OS 10 MAIS RECENTES
-        # ====================================================
-
-        for indice, info in enumerate(
-            backups_disponiveis[:10],
+        for indice, item in enumerate(
+            lista,
             start=1
         ):
 
-            criado_em = info[
-                "criado_em"
-            ]
-
-            data_formatada = (
-                criado_em.strftime(
-                    "%d/%m/%Y às %H:%M:%S"
+            nome, tamanho = (
+                obter_info_backup(
+                    item
                 )
             )
 
-            integridade = (
-                "✅ OK"
-                if info["integro"]
-                else "❌ FALHA"
-            )
+            if tamanho is not None:
 
-            embed.add_field(
-                name=(
-                    f"#{indice} — "
-                    f"{info['nome']}"
-                ),
-                value=(
-                    f"📅 {data_formatada}\n"
-                    f"💾 {info['tamanho_formatado']}\n"
-                    f"🔒 {integridade}"
-                ),
-                inline=False
-            )
-
-        if (
-            len(backups_disponiveis)
-            > 10
-        ):
-
-            restantes = (
-                len(backups_disponiveis)
-                - 10
-            )
-
-            embed.set_footer(
-                text=(
-                    f"Mostrando os 10 backups "
-                    f"mais recentes • "
-                    f"{restantes} não exibidos"
+                linhas.append(
+                    (
+                        f"**{indice}.** `{nome}`\n"
+                        f"└ 📦 "
+                        f"{formatar_tamanho(tamanho)}"
+                    )
                 )
-            )
 
-        else:
+            else:
 
-            embed.set_footer(
-                text=(
-                    "Backups ordenados "
-                    "do mais recente para o mais antigo"
+                linhas.append(
+                    (
+                        f"**{indice}.** "
+                        f"`{nome}`"
+                    )
                 )
-            )
 
-        await interaction.followup.send(
+        embed = discord.Embed(
+            title="💾 BACKUPS DO BOT",
+            description="\n\n".join(
+                linhas
+            ),
+            color=discord.Color.dark_red()
+        )
+
+        embed.set_footer(
+            text=(
+                "Exibindo até os "
+                "10 backups mais recentes"
+            )
+        )
+
+        await interaction.response.send_message(
             embed=embed,
             ephemeral=True
         )
