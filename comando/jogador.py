@@ -414,9 +414,7 @@ async def finalizar_criacao_jogador(
 
     db.commit()
 
-    ficha_id = (
-        cursor.lastrowid
-    )
+    ficha_id = cursor.lastrowid
 
     # ========================================================
     # CALCULAR RC
@@ -560,10 +558,7 @@ class ModalDadosJogador(
 
             return
 
-        nome = (
-            self.nome.value
-            .strip()
-        )
+        nome = self.nome.value.strip()
 
         if not nome:
 
@@ -574,10 +569,7 @@ class ModalDadosJogador(
 
             return
 
-        self.sessao.nome = (
-            nome[:50]
-        )
-
+        self.sessao.nome = nome[:50]
         self.sessao.hp = hp
         self.sessao.mana = mana
 
@@ -1615,175 +1607,181 @@ def registrar_comandos_jogador(
 
 
     # ========================================================
-# APAGAR PRÓPRIA FICHA
-# ========================================================
+    # APAGAR PRÓPRIA FICHA
+    # ========================================================
 
-@bot.tree.command(
-    name="apagarficha",
-    description="Apaga sua própria ficha."
-)
-async def apagarficha(
-    interaction: discord.Interaction
-):
-
-    dados = buscar_ficha_jogador(
-        interaction.channel.id,
-        interaction.user.id
+    @bot.tree.command(
+        name="apagarficha",
+        description="Apaga sua própria ficha."
     )
-
-    if dados is None:
-
-        await interaction.response.send_message(
-            "❌ Você não possui uma ficha.",
-            ephemeral=True
-        )
-
-        return
-
-    f = transformar_ficha(
-        dados
-    )
-
-    # ====================================================
-    # VIEW DE CONFIRMAÇÃO
-    # ====================================================
-
-    class ConfirmarApagarFichaView(
-        discord.ui.View
+    async def apagarficha(
+        interaction: discord.Interaction
     ):
 
-        def __init__(self):
+        dados = buscar_ficha_jogador(
+            interaction.channel.id,
+            interaction.user.id
+        )
 
-            super().__init__(
-                timeout=120
+        if dados is None:
+
+            await interaction.response.send_message(
+                "❌ Você não possui uma ficha.",
+                ephemeral=True
             )
 
-        async def interaction_check(
-            self,
-            nova_interaction: discord.Interaction
+            return
+
+        f = transformar_ficha(
+            dados
+        )
+
+        # ====================================================
+        # CONFIRMAÇÃO
+        # ====================================================
+
+        class ConfirmarApagarFichaView(
+            discord.ui.View
         ):
 
-            if (
-                nova_interaction.user.id
-                != interaction.user.id
+            def __init__(self):
+
+                super().__init__(
+                    timeout=120
+                )
+
+
+            async def interaction_check(
+                self,
+                nova_interaction: discord.Interaction
             ):
 
-                await nova_interaction.response.send_message(
-                    "❌ Somente quem iniciou esta ação "
-                    "pode usar estes botões.",
-                    ephemeral=True
-                )
+                if (
+                    nova_interaction.user.id
+                    != interaction.user.id
+                ):
 
-                return False
+                    await nova_interaction.response.send_message(
+                        "❌ Somente quem iniciou esta ação "
+                        "pode usar estes botões.",
+                        ephemeral=True
+                    )
 
-            return True
+                    return False
 
-        # ================================================
-        # CONFIRMAR
-        # ================================================
+                return True
 
-        @discord.ui.button(
-            label="Sim, apagar",
-            emoji="🗑️",
-            style=discord.ButtonStyle.danger
-        )
-        async def confirmar(
-            self,
-            nova_interaction: discord.Interaction,
-            button: discord.ui.Button
-        ):
 
-            dados_atualizados = (
-                buscar_ficha_jogador(
-                    interaction.channel.id,
-                    interaction.user.id
-                )
+            # ================================================
+            # CONFIRMAR
+            # ================================================
+
+            @discord.ui.button(
+                label="Sim, apagar",
+                emoji="🗑️",
+                style=discord.ButtonStyle.danger
             )
+            async def confirmar(
+                self,
+                nova_interaction: discord.Interaction,
+                button: discord.ui.Button
+            ):
 
-            if dados_atualizados is None:
+                dados_atualizados = (
+                    buscar_ficha_jogador(
+                        interaction.channel.id,
+                        interaction.user.id
+                    )
+                )
+
+                if dados_atualizados is None:
+
+                    await nova_interaction.response.edit_message(
+                        content=(
+                            "❌ A ficha não existe mais."
+                        ),
+                        view=None
+                    )
+
+                    self.stop()
+
+                    return
+
+                ficha_atual = transformar_ficha(
+                    dados_atualizados
+                )
+
+                cursor.execute("""
+                    DELETE FROM fichas
+                    WHERE id = ?
+                """, (
+                    ficha_atual["id"],
+                ))
+
+                db.commit()
+
+                registrar_historico(
+                    ficha_atual["channel_id"],
+                    ficha_atual["id"],
+                    ficha_atual["nome"],
+                    ficha_atual["tipo"],
+                    nova_interaction.user.id,
+                    "ficha_apagada",
+                    campo=None,
+                    valor_anterior=None,
+                    valor_novo=None,
+                    descricao=(
+                        "🗑️ Ficha de jogador apagada."
+                    )
+                )
 
                 await nova_interaction.response.edit_message(
                     content=(
-                        "❌ A ficha não existe mais."
+                        f"🗑️ Ficha "
+                        f"**{ficha_atual['nome']}** "
+                        f"apagada com sucesso."
                     ),
                     view=None
                 )
 
-                return
+                self.stop()
 
-            ficha_atual = transformar_ficha(
-                dados_atualizados
+
+            # ================================================
+            # CANCELAR
+            # ================================================
+
+            @discord.ui.button(
+                label="Cancelar",
+                emoji="❌",
+                style=discord.ButtonStyle.secondary
             )
+            async def cancelar(
+                self,
+                nova_interaction: discord.Interaction,
+                button: discord.ui.Button
+            ):
 
-            cursor.execute("""
-                DELETE FROM fichas
-                WHERE id = ?
-            """, (
-                ficha_atual["id"],
-            ))
-
-            db.commit()
-
-            registrar_historico(
-                ficha_atual["channel_id"],
-                ficha_atual["id"],
-                ficha_atual["nome"],
-                ficha_atual["tipo"],
-                nova_interaction.user.id,
-                "ficha_apagada",
-                campo=None,
-                valor_anterior=None,
-                valor_novo=None,
-                descricao=(
-                    "🗑️ Ficha de jogador apagada."
+                await nova_interaction.response.edit_message(
+                    content=(
+                        "❎ Exclusão cancelada. "
+                        "Sua ficha não foi apagada."
+                    ),
+                    view=None
                 )
-            )
 
-            await nova_interaction.response.edit_message(
-                content=(
-                    f"🗑️ Ficha "
-                    f"**{ficha_atual['nome']}** "
-                    f"apagada com sucesso."
-                ),
-                view=None
-            )
+                self.stop()
 
-        # ================================================
-        # CANCELAR
-        # ================================================
 
-        @discord.ui.button(
-            label="Cancelar",
-            emoji="❌",
-            style=discord.ButtonStyle.secondary
+        await interaction.response.send_message(
+            (
+                "⚠️ **Tem certeza que deseja apagar sua ficha?**\n\n"
+                f"📜 Personagem: **{f['nome']}**\n\n"
+                "Essa ação removerá a ficha da mesa."
+            ),
+            view=ConfirmarApagarFichaView(),
+            ephemeral=True
         )
-        async def cancelar(
-            self,
-            nova_interaction: discord.Interaction,
-            button: discord.ui.Button
-        ):
-
-            await nova_interaction.response.edit_message(
-                content=(
-                    "❎ Exclusão cancelada. "
-                    "Sua ficha não foi apagada."
-                ),
-                view=None
-            )
-
-    # ====================================================
-    # PEDIR CONFIRMAÇÃO
-    # ====================================================
-
-    await interaction.response.send_message(
-        (
-            "⚠️ **Tem certeza que deseja apagar sua ficha?**\n\n"
-            f"📜 Personagem: **{f['nome']}**\n\n"
-            "Essa ação removerá a ficha da mesa."
-        ),
-        view=ConfirmarApagarFichaView(),
-        ephemeral=True
-    )
 
 
     # ========================================================
