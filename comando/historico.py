@@ -2,7 +2,6 @@ import math
 from datetime import datetime, timezone
 
 import discord
-
 from discord import app_commands
 
 from database import cursor
@@ -16,7 +15,7 @@ REGISTROS_POR_PAGINA = 5
 
 
 # ============================================================
-# NOMES DOS CAMPOS
+# CAMPOS
 # ============================================================
 
 NOMES_CAMPOS = {
@@ -63,10 +62,6 @@ NOMES_CAMPOS = {
 }
 
 
-# ============================================================
-# ATRIBUTOS E PERÍCIAS
-# ============================================================
-
 CAMPOS_ATRIBUTOS = {
     "forca",
     "destreza",
@@ -105,7 +100,30 @@ CAMPOS_PERICIAS = {
 
 
 # ============================================================
-# ÍCONES
+# NOME DO FILTRO
+# ============================================================
+
+def nome_filtro(filtro):
+
+    nomes = {
+        "tudo": "📋 Tudo",
+        "jogadores": "👤 Jogadores",
+        "npcs": "👹 NPCs",
+        "hp": "❤️ HP",
+        "mana": "🔵 Mana",
+        "xp": "✨ XP",
+        "atributos": "⚔️ Atributos",
+        "pericias": "📚 Perícias",
+    }
+
+    return nomes.get(
+        filtro,
+        "📋 Tudo"
+    )
+
+
+# ============================================================
+# ÍCONE DA AÇÃO
 # ============================================================
 
 def icone_acao(
@@ -131,19 +149,19 @@ def icone_acao(
     if acao == "xp":
         return "✨"
 
-    if acao == "criacao":
-        return "📜"
+    if acao == "atributo":
+        return "⚔️"
 
-    if acao == "exclusao":
-        return "🗑️"
+    if acao == "pericia":
+        return "📚"
 
     if campo in CAMPOS_ATRIBUTOS:
-        return "📊"
+        return "⚔️"
 
     if campo in CAMPOS_PERICIAS:
         return "📚"
 
-    return "✏️"
+    return "⚙️"
 
 
 # ============================================================
@@ -166,8 +184,6 @@ def nome_acao(
         "pericia": "PERÍCIA ALTERADA",
         "recursos": "RECURSO ALTERADO",
         "edicao": "FICHA EDITADA",
-        "criacao": "FICHA CRIADA",
-        "exclusao": "FICHA EXCLUÍDA",
     }
 
     return nomes.get(
@@ -177,10 +193,10 @@ def nome_acao(
 
 
 # ============================================================
-# FILTRO SQL
+# MONTAR SQL DO FILTRO
 # ============================================================
 
-def montar_filtro(
+def montar_consulta(
     channel_id,
     filtro
 ):
@@ -206,17 +222,29 @@ def montar_filtro(
         channel_id
     ]
 
+    # ========================================================
+    # JOGADORES
+    # ========================================================
+
     if filtro == "jogadores":
 
         sql += """
             AND ficha_tipo = 'jogador'
         """
 
+    # ========================================================
+    # NPCs
+    # ========================================================
+
     elif filtro == "npcs":
 
         sql += """
             AND ficha_tipo = 'npc'
         """
+
+    # ========================================================
+    # HP
+    # ========================================================
 
     elif filtro == "hp":
 
@@ -231,6 +259,10 @@ def montar_filtro(
             )
         """
 
+    # ========================================================
+    # MANA
+    # ========================================================
+
     elif filtro == "mana":
 
         sql += """
@@ -243,6 +275,10 @@ def montar_filtro(
             )
         """
 
+    # ========================================================
+    # XP
+    # ========================================================
+
     elif filtro == "xp":
 
         sql += """
@@ -252,11 +288,19 @@ def montar_filtro(
             )
         """
 
+    # ========================================================
+    # ATRIBUTOS
+    # ========================================================
+
     elif filtro == "atributos":
+
+        campos = sorted(
+            CAMPOS_ATRIBUTOS
+        )
 
         marcadores = ",".join(
             "?"
-            for _ in CAMPOS_ATRIBUTOS
+            for _ in campos
         )
 
         sql += f"""
@@ -264,16 +308,22 @@ def montar_filtro(
         """
 
         parametros.extend(
-            sorted(
-                CAMPOS_ATRIBUTOS
-            )
+            campos
         )
+
+    # ========================================================
+    # PERÍCIAS
+    # ========================================================
 
     elif filtro == "pericias":
 
+        campos = sorted(
+            CAMPOS_PERICIAS
+        )
+
         marcadores = ",".join(
             "?"
-            for _ in CAMPOS_PERICIAS
+            for _ in campos
         )
 
         sql += f"""
@@ -281,9 +331,7 @@ def montar_filtro(
         """
 
         parametros.extend(
-            sorted(
-                CAMPOS_PERICIAS
-            )
+            campos
         )
 
     return (
@@ -302,7 +350,7 @@ def buscar_historico_filtrado(
 ):
 
     sql, parametros = (
-        montar_filtro(
+        montar_consulta(
             channel_id,
             filtro
         )
@@ -324,12 +372,11 @@ def buscar_historico_filtrado(
 # TOTAL DE PÁGINAS
 # ============================================================
 
-def total_paginas(
+def calcular_total_paginas(
     quantidade
 ):
 
     if quantidade <= 0:
-
         return 1
 
     return math.ceil(
@@ -339,32 +386,32 @@ def total_paginas(
 
 
 # ============================================================
-# FORMATAR HORÁRIO
+# HORÁRIO DO DISCORD
 # ============================================================
 
-def formatar_horario(
-    valor
+def formatar_data_discord(
+    criado_em
 ):
 
-    if valor is None:
-
-        return ""
+    if criado_em is None:
+        return None
 
     try:
 
         texto = str(
-            valor
+            criado_em
         )
 
-        data = datetime.fromisoformat(
-            texto
+        # SQLite CURRENT_TIMESTAMP:
+        # YYYY-MM-DD HH:MM:SS
+        data = datetime.strptime(
+            texto,
+            "%Y-%m-%d %H:%M:%S"
         )
 
-        if data.tzinfo is None:
-
-            data = data.replace(
-                tzinfo=timezone.utc
-            )
+        data = data.replace(
+            tzinfo=timezone.utc
+        )
 
         timestamp = int(
             data.timestamp()
@@ -377,12 +424,34 @@ def formatar_horario(
     except Exception:
 
         return str(
-            valor
+            criado_em
         )
 
 
 # ============================================================
-# FORMATAR REGISTRO
+# NOME VISUAL DA FICHA
+# ============================================================
+
+def nome_visual_ficha(
+    ficha_id,
+    ficha_nome,
+    ficha_tipo
+):
+
+    if (
+        ficha_tipo == "npc"
+        and ficha_id is not None
+    ):
+
+        return (
+            f"{ficha_nome} #{ficha_id}"
+        )
+
+    return ficha_nome
+
+
+# ============================================================
+# FORMATAR UM REGISTRO
 # ============================================================
 
 def formatar_registro(
@@ -409,20 +478,13 @@ def formatar_registro(
         else "👤"
     )
 
-    if (
-        ficha_tipo == "npc"
-        and ficha_id is not None
-    ):
-
-        nome_visual = (
-            f"{ficha_nome} #{ficha_id}"
+    nome_visual = (
+        nome_visual_ficha(
+            ficha_id,
+            ficha_nome,
+            ficha_tipo
         )
-
-    else:
-
-        nome_visual = (
-            ficha_nome
-        )
+    )
 
     icone = icone_acao(
         acao,
@@ -438,6 +500,10 @@ def formatar_registro(
         f"{icone} **{titulo}**",
         f"{emoji_tipo} **{nome_visual}**",
     ]
+
+    # ========================================================
+    # VALORES
+    # ========================================================
 
     if campo:
 
@@ -468,11 +534,19 @@ def formatar_registro(
                 f"`{valor_novo}`"
             )
 
+    # ========================================================
+    # DESCRIÇÃO
+    # ========================================================
+
     if descricao:
 
         linhas.append(
             descricao
         )
+
+    # ========================================================
+    # USUÁRIO
+    # ========================================================
 
     if usuario_id is not None:
 
@@ -480,7 +554,11 @@ def formatar_registro(
             f"👤 Alterado por <@{usuario_id}>"
         )
 
-    horario = formatar_horario(
+    # ========================================================
+    # HORÁRIO
+    # ========================================================
+
+    horario = formatar_data_discord(
         criado_em
     )
 
@@ -512,15 +590,21 @@ def criar_embed_historico(
         )
     )
 
-    paginas = total_paginas(
-        len(registros)
+    quantidade = len(
+        registros
+    )
+
+    total_paginas = (
+        calcular_total_paginas(
+            quantidade
+        )
     )
 
     pagina = max(
         0,
         min(
             pagina,
-            paginas - 1
+            total_paginas - 1
         )
     )
 
@@ -545,11 +629,18 @@ def criar_embed_historico(
         color=discord.Color.dark_red()
     )
 
+    embed.add_field(
+        name="🔎 Filtro",
+        value=nome_filtro(
+            filtro
+        ),
+        inline=False
+    )
+
     if not registros_pagina:
 
         embed.description = (
-            "📭 Nenhuma alteração encontrada "
-            "para este filtro."
+            "📭 Nenhuma alteração encontrada."
         )
 
     else:
@@ -573,19 +664,20 @@ def criar_embed_historico(
 
     embed.set_footer(
         text=(
-            f"Página {pagina + 1}/{paginas} "
-            f"• {len(registros)} registro(s)"
+            f"Página {pagina + 1}/{total_paginas} "
+            f"• {quantidade} registro(s)"
         )
     )
 
     return (
         embed,
-        paginas
+        total_paginas,
+        pagina
     )
 
 
 # ============================================================
-# VIEW
+# VIEW DO HISTÓRICO
 # ============================================================
 
 class HistoricoView(
@@ -617,25 +709,39 @@ class HistoricoView(
 
         self.pagina = 0
 
+        self.total_paginas = 1
+
+        self.atualizar_estado()
+
+
+    # ========================================================
+    # ATUALIZAR TOTAL
+    # ========================================================
+
+    def atualizar_estado(
+        self
+    ):
+
         registros = (
             buscar_historico_filtrado(
-                channel_id,
-                filtro
+                self.channel_id,
+                self.filtro
             )
         )
 
-        self.paginas = (
-            total_paginas(
+        self.total_paginas = (
+            calcular_total_paginas(
                 len(registros)
             )
         )
 
-        self.atualizar_botoes()
-
-
-    def atualizar_botoes(
-        self
-    ):
+        self.pagina = max(
+            0,
+            min(
+                self.pagina,
+                self.total_paginas - 1
+            )
+        )
 
         self.anterior.disabled = (
             self.pagina <= 0
@@ -643,9 +749,13 @@ class HistoricoView(
 
         self.proxima.disabled = (
             self.pagina
-            >= self.paginas - 1
+            >= self.total_paginas - 1
         )
 
+
+    # ========================================================
+    # SOMENTE AUTOR
+    # ========================================================
 
     async def interaction_check(
         self,
@@ -668,12 +778,18 @@ class HistoricoView(
         return True
 
 
-    async def atualizar(
+    # ========================================================
+    # ATUALIZAR MENSAGEM
+    # ========================================================
+
+    async def atualizar_mensagem(
         self,
         interaction
     ):
 
-        embed, paginas = (
+        self.atualizar_estado()
+
+        embed, total, pagina = (
             criar_embed_historico(
                 self.channel_id,
                 self.filtro,
@@ -681,37 +797,20 @@ class HistoricoView(
             )
         )
 
-        self.paginas = (
-            paginas
-        )
+        self.total_paginas = total
+        self.pagina = pagina
 
-        if (
-            self.pagina
-            >= self.paginas
-        ):
-
-            self.pagina = max(
-                0,
-                self.paginas - 1
-            )
-
-            embed, paginas = (
-                criar_embed_historico(
-                    self.channel_id,
-                    self.filtro,
-                    self.pagina
-                )
-            )
-
-            self.paginas = paginas
-
-        self.atualizar_botoes()
+        self.atualizar_estado()
 
         await interaction.response.edit_message(
             embed=embed,
             view=self
         )
 
+
+    # ========================================================
+    # ANTERIOR
+    # ========================================================
 
     @discord.ui.button(
         label="◀ Anterior",
@@ -727,10 +826,14 @@ class HistoricoView(
 
             self.pagina -= 1
 
-        await self.atualizar(
+        await self.atualizar_mensagem(
             interaction
         )
 
+
+    # ========================================================
+    # PRÓXIMA
+    # ========================================================
 
     @discord.ui.button(
         label="Próxima ▶",
@@ -744,18 +847,18 @@ class HistoricoView(
 
         if (
             self.pagina
-            < self.paginas - 1
+            < self.total_paginas - 1
         ):
 
             self.pagina += 1
 
-        await self.atualizar(
+        await self.atualizar_mensagem(
             interaction
         )
 
 
 # ============================================================
-# REGISTRAR COMANDO
+# REGISTRAR COMANDOS
 # ============================================================
 
 def registrar_comandos_historico(
@@ -767,7 +870,7 @@ def registrar_comandos_historico(
         description="Mostra o histórico de alterações da mesa."
     )
     @app_commands.describe(
-        filtro="Filtra os tipos de alterações exibidas"
+        filtro="Escolha quais alterações deseja visualizar"
     )
     @app_commands.choices(
         filtro=[
@@ -796,7 +899,7 @@ def registrar_comandos_historico(
                 value="xp"
             ),
             app_commands.Choice(
-                name="📊 Atributos",
+                name="⚔️ Atributos",
                 value="atributos"
             ),
             app_commands.Choice(
@@ -836,14 +939,14 @@ def registrar_comandos_historico(
         if not registros:
 
             await interaction.response.send_message(
-                "📭 Nenhuma alteração registrada "
+                "📭 Ainda não existem registros "
                 "para esse filtro.",
                 ephemeral=True
             )
 
             return
 
-        embed, paginas = (
+        embed, total, pagina = (
             criar_embed_historico(
                 interaction.channel.id,
                 filtro_escolhido,
