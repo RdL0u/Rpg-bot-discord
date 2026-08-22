@@ -1350,6 +1350,10 @@ def registrar_comandos_mestre(bot):
         interaction: discord.Interaction
     ):
 
+        # ====================================================
+        # PERMISSÃO
+        # ====================================================
+
         if (
             not eh_mestre(interaction)
             and not eh_admin(interaction)
@@ -1363,6 +1367,754 @@ def registrar_comandos_mestre(bot):
 
             return
 
+        # ====================================================
+        # BUSCAR NPCS
+        # ====================================================
+
+        cursor.execute("""
+            SELECT id, nome
+            FROM fichas
+            WHERE channel_id = ?
+            AND tipo = 'npc'
+            ORDER BY nome
+        """, (
+            interaction.channel.id,
+        ))
+
+        npcs_encontrados = cursor.fetchall()
+
+        if not npcs_encontrados:
+
+            await interaction.response.send_message(
+                "👹 Não existem NPCs neste canal.",
+                ephemeral=True
+            )
+
+            return
+
+        # ====================================================
+        # SELETOR DE NPC
+        # ====================================================
+
+        class SelectNPC(
+            discord.ui.Select
+        ):
+
+            def __init__(
+                self,
+                multiplo
+            ):
+
+                self.multiplo = multiplo
+
+                opcoes = []
+
+                # Discord permite no máximo
+                # 25 opções em um Select
+                for npc_id, nome in npcs_encontrados[:25]:
+
+                    opcoes.append(
+                        discord.SelectOption(
+                            label=(
+                                f"{nome} #{npc_id}"
+                            )[:100],
+                            value=str(
+                                npc_id
+                            ),
+                            emoji="👹"
+                        )
+                    )
+
+                if multiplo:
+
+                    maximo = len(
+                        opcoes
+                    )
+
+                else:
+
+                    maximo = 1
+
+                super().__init__(
+                    placeholder=(
+                        "Selecione os NPCs..."
+                        if multiplo
+                        else
+                        "Selecione um NPC..."
+                    ),
+                    min_values=1,
+                    max_values=maximo,
+                    options=opcoes
+                )
+
+
+            async def callback(
+                self,
+                nova_interaction: discord.Interaction
+            ):
+
+                # ============================================
+                # SOMENTE QUEM INICIOU
+                # ============================================
+
+                if (
+                    nova_interaction.user.id
+                    != interaction.user.id
+                ):
+
+                    await nova_interaction.response.send_message(
+                        "❌ Você não pode usar este menu.",
+                        ephemeral=True
+                    )
+
+                    return
+
+                ids = [
+                    int(
+                        valor
+                    )
+                    for valor in self.values
+                ]
+
+                placeholders = ", ".join(
+                    ["?"] * len(ids)
+                )
+
+                # ============================================
+                # REVALIDAR NPCS
+                # ============================================
+
+                cursor.execute(
+                    f"""
+                    SELECT id, nome
+                    FROM fichas
+                    WHERE channel_id = ?
+                    AND tipo = 'npc'
+                    AND id IN ({placeholders})
+                    """,
+                    [
+                        interaction.channel.id
+                    ] + ids
+                )
+
+                selecionados = (
+                    cursor.fetchall()
+                )
+
+                if not selecionados:
+
+                    await nova_interaction.response.edit_message(
+                        content=(
+                            "❌ Os NPCs selecionados "
+                            "não existem mais."
+                        ),
+                        view=None
+                    )
+
+                    return
+
+                texto_nomes = "\n".join(
+                    (
+                        f"• 👹 **{nome} #{npc_id}**"
+                    )
+                    for npc_id, nome
+                    in selecionados
+                )
+
+                # ============================================
+                # PEDIR CONFIRMAÇÃO
+                # ============================================
+
+                await nova_interaction.response.edit_message(
+                    content=(
+                        "⚠️ **Confirmar exclusão?**\n\n"
+                        f"{texto_nomes}\n\n"
+                        "Esta ação não poderá ser desfeita."
+                    ),
+                    view=ViewConfirmarSelecionados(
+                        ids
+                    )
+                )
+
+
+        # ====================================================
+        # VIEW DE SELEÇÃO
+        # ====================================================
+
+        class ViewSelecionarNPC(
+            discord.ui.View
+        ):
+
+            def __init__(
+                self,
+                multiplo
+            ):
+
+                super().__init__(
+                    timeout=300
+                )
+
+                self.add_item(
+                    SelectNPC(
+                        multiplo
+                    )
+                )
+
+
+            async def interaction_check(
+                self,
+                nova_interaction: discord.Interaction
+            ):
+
+                if (
+                    nova_interaction.user.id
+                    != interaction.user.id
+                ):
+
+                    await nova_interaction.response.send_message(
+                        "❌ Somente quem iniciou esta ação "
+                        "pode usar este menu.",
+                        ephemeral=True
+                    )
+
+                    return False
+
+                return True
+
+
+        # ====================================================
+        # CONFIRMAR NPCS SELECIONADOS
+        # ====================================================
+
+        class ViewConfirmarSelecionados(
+            discord.ui.View
+        ):
+
+            def __init__(
+                self,
+                ids
+            ):
+
+                super().__init__(
+                    timeout=300
+                )
+
+                self.ids = ids
+
+
+            async def interaction_check(
+                self,
+                nova_interaction: discord.Interaction
+            ):
+
+                if (
+                    nova_interaction.user.id
+                    != interaction.user.id
+                ):
+
+                    await nova_interaction.response.send_message(
+                        "❌ Você não pode confirmar esta ação.",
+                        ephemeral=True
+                    )
+
+                    return False
+
+                return True
+
+
+            # ================================================
+            # CONFIRMAR
+            # ================================================
+
+            @discord.ui.button(
+                label="Confirmar exclusão",
+                emoji="🗑️",
+                style=discord.ButtonStyle.danger
+            )
+            async def confirmar(
+                self,
+                nova_interaction: discord.Interaction,
+                button: discord.ui.Button
+            ):
+
+                placeholders = ", ".join(
+                    ["?"] * len(
+                        self.ids
+                    )
+                )
+
+                # ============================================
+                # REVALIDAR ANTES DE APAGAR
+                # ============================================
+
+                cursor.execute(
+                    f"""
+                    SELECT id, nome
+                    FROM fichas
+                    WHERE channel_id = ?
+                    AND tipo = 'npc'
+                    AND id IN ({placeholders})
+                    """,
+                    [
+                        interaction.channel.id
+                    ] + self.ids
+                )
+
+                encontrados = (
+                    cursor.fetchall()
+                )
+
+                if not encontrados:
+
+                    await nova_interaction.response.edit_message(
+                        content=(
+                            "❌ Os NPCs selecionados "
+                            "não existem mais."
+                        ),
+                        view=None
+                    )
+
+                    self.stop()
+
+                    return
+
+                ids_validos = [
+                    npc_id
+                    for npc_id, nome
+                    in encontrados
+                ]
+
+                placeholders_validos = ", ".join(
+                    ["?"] * len(
+                        ids_validos
+                    )
+                )
+
+                # ============================================
+                # REGISTRAR NO HISTÓRICO
+                # ============================================
+
+                for npc_id, nome in encontrados:
+
+                    registrar_historico(
+                        interaction.channel.id,
+                        npc_id,
+                        nome,
+                        "npc",
+                        nova_interaction.user.id,
+                        "npc_apagado",
+                        campo=None,
+                        valor_anterior=None,
+                        valor_novo=None,
+                        descricao=(
+                            "🗑️ NPC apagado manualmente."
+                        )
+                    )
+
+                # ============================================
+                # APAGAR
+                # ============================================
+
+                cursor.execute(
+                    f"""
+                    DELETE FROM fichas
+                    WHERE channel_id = ?
+                    AND tipo = 'npc'
+                    AND id IN ({placeholders_validos})
+                    """,
+                    [
+                        interaction.channel.id
+                    ] + ids_validos
+                )
+
+                db.commit()
+
+                # ============================================
+                # RESULTADO
+                # ============================================
+
+                if len(
+                    encontrados
+                ) == 1:
+
+                    npc_id, nome = (
+                        encontrados[0]
+                    )
+
+                    mensagem = (
+                        f"🗑️ NPC "
+                        f"**{nome} #{npc_id}** "
+                        f"apagado com sucesso."
+                    )
+
+                else:
+
+                    lista = "\n".join(
+                        (
+                            f"• {nome} #{npc_id}"
+                        )
+                        for npc_id, nome
+                        in encontrados
+                    )
+
+                    mensagem = (
+                        f"🗑️ **{len(encontrados)} NPCs "
+                        f"apagados com sucesso:**\n\n"
+                        f"{lista}"
+                    )
+
+                await nova_interaction.response.edit_message(
+                    content=mensagem,
+                    view=None
+                )
+
+                self.stop()
+
+
+            # ================================================
+            # CANCELAR
+            # ================================================
+
+            @discord.ui.button(
+                label="Cancelar",
+                emoji="❌",
+                style=discord.ButtonStyle.secondary
+            )
+            async def cancelar(
+                self,
+                nova_interaction: discord.Interaction,
+                button: discord.ui.Button
+            ):
+
+                await nova_interaction.response.edit_message(
+                    content=(
+                        "❎ Exclusão cancelada. "
+                        "Nenhum NPC foi apagado."
+                    ),
+                    view=None
+                )
+
+                self.stop()
+
+
+        # ====================================================
+        # CONFIRMAR EXCLUSÃO DE TODOS
+        # ====================================================
+
+        class ViewConfirmarTodos(
+            discord.ui.View
+        ):
+
+            def __init__(
+                self
+            ):
+
+                super().__init__(
+                    timeout=300
+                )
+
+
+            async def interaction_check(
+                self,
+                nova_interaction: discord.Interaction
+            ):
+
+                if (
+                    nova_interaction.user.id
+                    != interaction.user.id
+                ):
+
+                    await nova_interaction.response.send_message(
+                        "❌ Você não pode confirmar esta ação.",
+                        ephemeral=True
+                    )
+
+                    return False
+
+                return True
+
+
+            # ================================================
+            # CONFIRMAR TODOS
+            # ================================================
+
+            @discord.ui.button(
+                label="Sim, apagar todos",
+                emoji="🗑️",
+                style=discord.ButtonStyle.danger
+            )
+            async def confirmar(
+                self,
+                nova_interaction: discord.Interaction,
+                button: discord.ui.Button
+            ):
+
+                # ============================================
+                # BUSCAR NOVAMENTE
+                # ============================================
+
+                cursor.execute("""
+                    SELECT id, nome
+                    FROM fichas
+                    WHERE channel_id = ?
+                    AND tipo = 'npc'
+                    ORDER BY nome
+                """, (
+                    interaction.channel.id,
+                ))
+
+                encontrados = (
+                    cursor.fetchall()
+                )
+
+                quantidade = len(
+                    encontrados
+                )
+
+                if quantidade == 0:
+
+                    await nova_interaction.response.edit_message(
+                        content=(
+                            "👹 Não existem mais NPCs "
+                            "para apagar."
+                        ),
+                        view=None
+                    )
+
+                    self.stop()
+
+                    return
+
+                # ============================================
+                # HISTÓRICO
+                # ============================================
+
+                for npc_id, nome in encontrados:
+
+                    registrar_historico(
+                        interaction.channel.id,
+                        npc_id,
+                        nome,
+                        "npc",
+                        nova_interaction.user.id,
+                        "npc_apagado",
+                        campo=None,
+                        valor_anterior=None,
+                        valor_novo=None,
+                        descricao=(
+                            "🗑️ NPC apagado manualmente "
+                            "na exclusão em massa."
+                        )
+                    )
+
+                # ============================================
+                # APAGAR TODOS
+                # ============================================
+
+                cursor.execute("""
+                    DELETE FROM fichas
+                    WHERE channel_id = ?
+                    AND tipo = 'npc'
+                """, (
+                    interaction.channel.id,
+                ))
+
+                db.commit()
+
+                await nova_interaction.response.edit_message(
+                    content=(
+                        f"🗑️ **{quantidade} NPC(s)** "
+                        f"foram apagados da mesa."
+                    ),
+                    view=None
+                )
+
+                self.stop()
+
+
+            # ================================================
+            # CANCELAR
+            # ================================================
+
+            @discord.ui.button(
+                label="Cancelar",
+                emoji="❌",
+                style=discord.ButtonStyle.secondary
+            )
+            async def cancelar(
+                self,
+                nova_interaction: discord.Interaction,
+                button: discord.ui.Button
+            ):
+
+                await nova_interaction.response.edit_message(
+                    content=(
+                        "❎ Exclusão cancelada. "
+                        "Nenhum NPC foi apagado."
+                    ),
+                    view=None
+                )
+
+                self.stop()
+
+
+        # ====================================================
+        # MENU INICIAL
+        # ====================================================
+
+        class ViewModoExclusao(
+            discord.ui.View
+        ):
+
+            def __init__(
+                self
+            ):
+
+                super().__init__(
+                    timeout=300
+                )
+
+
+            async def interaction_check(
+                self,
+                nova_interaction: discord.Interaction
+            ):
+
+                if (
+                    nova_interaction.user.id
+                    != interaction.user.id
+                ):
+
+                    await nova_interaction.response.send_message(
+                        "❌ Somente quem iniciou esta ação "
+                        "pode usar estes botões.",
+                        ephemeral=True
+                    )
+
+                    return False
+
+                return True
+
+
+            # ================================================
+            # UM NPC
+            # ================================================
+
+            @discord.ui.button(
+                label="Um NPC",
+                emoji="👹",
+                style=discord.ButtonStyle.primary
+            )
+            async def um_npc(
+                self,
+                nova_interaction: discord.Interaction,
+                button: discord.ui.Button
+            ):
+
+                await nova_interaction.response.edit_message(
+                    content=(
+                        "👹 **Qual NPC deseja apagar?**"
+                    ),
+                    view=ViewSelecionarNPC(
+                        multiplo=False
+                    )
+                )
+
+
+            # ================================================
+            # VÁRIOS NPCS
+            # ================================================
+
+            @discord.ui.button(
+                label="Vários NPCs",
+                emoji="👥",
+                style=discord.ButtonStyle.secondary
+            )
+            async def varios_npcs(
+                self,
+                nova_interaction: discord.Interaction,
+                button: discord.ui.Button
+            ):
+
+                await nova_interaction.response.edit_message(
+                    content=(
+                        "👹 **Selecione os NPCs "
+                        "que deseja apagar:**"
+                    ),
+                    view=ViewSelecionarNPC(
+                        multiplo=True
+                    )
+                )
+
+
+            # ================================================
+            # TODOS
+            # ================================================
+
+            @discord.ui.button(
+                label="Todos",
+                emoji="⚠️",
+                style=discord.ButtonStyle.danger
+            )
+            async def todos(
+                self,
+                nova_interaction: discord.Interaction,
+                button: discord.ui.Button
+            ):
+
+                # Recontar para a mensagem
+                cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM fichas
+                    WHERE channel_id = ?
+                    AND tipo = 'npc'
+                """, (
+                    interaction.channel.id,
+                ))
+
+                quantidade_atual = (
+                    cursor.fetchone()[0]
+                )
+
+                if quantidade_atual == 0:
+
+                    await nova_interaction.response.edit_message(
+                        content=(
+                            "👹 Não existem mais NPCs "
+                            "nesta mesa."
+                        ),
+                        view=None
+                    )
+
+                    self.stop()
+
+                    return
+
+                await nova_interaction.response.edit_message(
+                    content=(
+                        "⚠️ **ATENÇÃO**\n\n"
+                        f"Você está prestes a apagar "
+                        f"**{quantidade_atual} NPC(s)** "
+                        f"desta mesa.\n\n"
+                        "Esta ação não poderá ser desfeita.\n\n"
+                        "Deseja continuar?"
+                    ),
+                    view=ViewConfirmarTodos()
+                )
+
+
+        # ====================================================
+        # MOSTRAR MENU
+        # ====================================================
+
+        await interaction.response.send_message(
+            "🗑️ **Gerenciamento de exclusão de NPCs**\n\n"
+            f"Existem **{len(npcs_encontrados)} NPC(s)** "
+            f"nesta mesa.\n\n"
+            "O que deseja apagar?",
+            view=ViewModoExclusao(),
+            ephemeral=True
+        )
         # ====================================================
         # BUSCAR NPCS
         # ====================================================
