@@ -8,6 +8,7 @@ from database import (
     garantir_mesa,
     obter_mestre,
     buscar_ficha_jogador,
+    registrar_historico,
 )
 
 from fichas import (
@@ -192,7 +193,8 @@ class DanoModal(
         )
 
         dano_real = (
-            hp_anterior - novo_hp
+            hp_anterior
+            - novo_hp
         )
 
         # ====================================================
@@ -203,6 +205,26 @@ class DanoModal(
             f["tipo"] == "npc"
             and novo_hp <= 0
         ):
+
+            # ================================================
+            # REGISTRAR HISTÓRICO ANTES DE APAGAR O NPC
+            # ================================================
+
+            registrar_historico(
+                interaction.channel.id,
+                f["id"],
+                f["nome"],
+                f["tipo"],
+                interaction.user.id,
+                "npc_derrotado",
+                campo="hp",
+                valor_anterior=hp_anterior,
+                valor_novo=0,
+                descricao=(
+                    f"💥 {dano_real} de dano recebido. "
+                    f"🗑️ NPC derrotado e removido da mesa."
+                )
+            )
 
             cursor.execute("""
                 DELETE FROM fichas
@@ -246,6 +268,25 @@ class DanoModal(
         ))
 
         db.commit()
+
+        # ====================================================
+        # REGISTRAR HISTÓRICO DE DANO
+        # ====================================================
+
+        registrar_historico(
+            interaction.channel.id,
+            f["id"],
+            f["nome"],
+            f["tipo"],
+            interaction.user.id,
+            "dano",
+            campo="hp",
+            valor_anterior=hp_anterior,
+            valor_novo=novo_hp,
+            descricao=(
+                f"💥 {dano_real} de dano recebido."
+            )
+        )
 
         estado = estado_hp(
             novo_hp,
@@ -342,9 +383,7 @@ class DanoAlvoSelect(
             else:
 
                 label = nome
-
                 emoji = "👤"
-
                 descricao = "Jogador"
 
             opcoes.append(
@@ -716,6 +755,11 @@ def registrar_comandos_jogador(bot):
             dados
         )
 
+        valor_anterior = f.get(
+            atributo.value,
+            0
+        )
+
         cursor.execute(
             f"""
             UPDATE fichas
@@ -729,6 +773,22 @@ def registrar_comandos_jogador(bot):
         )
 
         db.commit()
+
+        # ====================================================
+        # HISTÓRICO DO ATRIBUTO
+        # ====================================================
+
+        registrar_historico(
+            interaction.channel.id,
+            f["id"],
+            f["nome"],
+            f["tipo"],
+            interaction.user.id,
+            "atributo",
+            campo=atributo.value,
+            valor_anterior=valor_anterior,
+            valor_novo=valor
+        )
 
         await interaction.response.send_message(
             f"⚔️ **{ATRIBUTOS[atributo.value][1]}** "
@@ -876,6 +936,11 @@ def registrar_comandos_jogador(bot):
             dados
         )
 
+        valor_anterior = f.get(
+            pericia.value,
+            0
+        )
+
         cursor.execute(
             f"""
             UPDATE fichas
@@ -889,6 +954,22 @@ def registrar_comandos_jogador(bot):
         )
 
         db.commit()
+
+        # ====================================================
+        # HISTÓRICO DA PERÍCIA
+        # ====================================================
+
+        registrar_historico(
+            interaction.channel.id,
+            f["id"],
+            f["nome"],
+            f["tipo"],
+            interaction.user.id,
+            "pericia",
+            campo=pericia.value,
+            valor_anterior=valor_anterior,
+            valor_novo=valor
+        )
 
         await interaction.response.send_message(
             f"📚 **{PERICIAS[pericia.value][1]}** "
@@ -957,6 +1038,14 @@ def registrar_comandos_jogador(bot):
 
             return
 
+        hp_anterior = (
+            f"{f['hp_atual']}/{f['hp_max']}"
+        )
+
+        mana_anterior = (
+            f"{f['mana_atual']}/{f['mana_max']}"
+        )
+
         cursor.execute("""
             UPDATE fichas
             SET hp_atual = ?,
@@ -973,6 +1062,34 @@ def registrar_comandos_jogador(bot):
         ))
 
         db.commit()
+
+        # ====================================================
+        # HISTÓRICO DOS RECURSOS
+        # ====================================================
+
+        registrar_historico(
+            interaction.channel.id,
+            f["id"],
+            f["nome"],
+            f["tipo"],
+            interaction.user.id,
+            "recursos",
+            campo="hp",
+            valor_anterior=hp_anterior,
+            valor_novo=f"{hp}/{hp}"
+        )
+
+        registrar_historico(
+            interaction.channel.id,
+            f["id"],
+            f["nome"],
+            f["tipo"],
+            interaction.user.id,
+            "recursos",
+            campo="mana",
+            valor_anterior=mana_anterior,
+            valor_novo=f"{mana}/{mana}"
+        )
 
         estado_atual_hp = estado_hp(
             hp,
@@ -1132,7 +1249,8 @@ def registrar_comandos_jogador(bot):
         )
 
         recuperado = (
-            novo_hp - hp_anterior
+            novo_hp
+            - hp_anterior
         )
 
         cursor.execute("""
@@ -1145,6 +1263,25 @@ def registrar_comandos_jogador(bot):
         ))
 
         db.commit()
+
+        # ====================================================
+        # HISTÓRICO DA CURA
+        # ====================================================
+
+        registrar_historico(
+            interaction.channel.id,
+            f["id"],
+            f["nome"],
+            f["tipo"],
+            interaction.user.id,
+            "cura",
+            campo="hp",
+            valor_anterior=hp_anterior,
+            valor_novo=novo_hp,
+            descricao=(
+                f"💚 {recuperado} de HP recuperado."
+            )
+        )
 
         estado = estado_hp(
             novo_hp,
@@ -1227,7 +1364,8 @@ def registrar_comandos_jogador(bot):
         ]
 
         nova_mana = (
-            mana_anterior - valor
+            mana_anterior
+            - valor
         )
 
         cursor.execute("""
@@ -1240,6 +1378,25 @@ def registrar_comandos_jogador(bot):
         ))
 
         db.commit()
+
+        # ====================================================
+        # HISTÓRICO DO GASTO DE MANA
+        # ====================================================
+
+        registrar_historico(
+            interaction.channel.id,
+            f["id"],
+            f["nome"],
+            f["tipo"],
+            interaction.user.id,
+            "mana_gasta",
+            campo="mana",
+            valor_anterior=mana_anterior,
+            valor_novo=nova_mana,
+            descricao=(
+                f"🔮 {valor} de Mana consumida."
+            )
+        )
 
         estado = estado_mana(
             nova_mana,
@@ -1312,7 +1469,8 @@ def registrar_comandos_jogador(bot):
         )
 
         recuperado = (
-            nova_mana - mana_anterior
+            nova_mana
+            - mana_anterior
         )
 
         cursor.execute("""
@@ -1325,6 +1483,25 @@ def registrar_comandos_jogador(bot):
         ))
 
         db.commit()
+
+        # ====================================================
+        # HISTÓRICO DA RECUPERAÇÃO DE MANA
+        # ====================================================
+
+        registrar_historico(
+            interaction.channel.id,
+            f["id"],
+            f["nome"],
+            f["tipo"],
+            interaction.user.id,
+            "mana_recuperada",
+            campo="mana",
+            valor_anterior=mana_anterior,
+            valor_novo=nova_mana,
+            descricao=(
+                f"💧 {recuperado} de Mana recuperada."
+            )
+        )
 
         estado = estado_mana(
             nova_mana,
@@ -1405,6 +1582,11 @@ def registrar_comandos_jogador(bot):
 
             return
 
+        xp_anterior = f.get(
+            "xp",
+            0
+        )
+
         cursor.execute("""
             UPDATE fichas
             SET xp = xp + ?
@@ -1429,6 +1611,25 @@ def registrar_comandos_jogador(bot):
         xp_atual = resultado[
             0
         ]
+
+        # ====================================================
+        # HISTÓRICO DO XP
+        # ====================================================
+
+        registrar_historico(
+            interaction.channel.id,
+            f["id"],
+            f["nome"],
+            f["tipo"],
+            interaction.user.id,
+            "xp",
+            campo="xp",
+            valor_anterior=xp_anterior,
+            valor_novo=xp_atual,
+            descricao=(
+                f"✨ {valor} XP adicionado."
+            )
+        )
 
         await interaction.response.send_message(
             f"✨ **XP ADICIONADO**\n\n"
