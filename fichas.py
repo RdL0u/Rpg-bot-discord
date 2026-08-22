@@ -19,7 +19,38 @@ from comando.permissoes import (
 
 
 # ============================================================
-# BUSCAR FICHA DE JOGADOR
+# GRUPOS DE ATRIBUTOS PARA EDIÇÃO
+# ============================================================
+
+GRUPOS_ATRIBUTOS_EDICAO = [
+    [
+        "forca",
+        "destreza",
+        "vigor",
+    ],
+    [
+        "inteligencia",
+        "carisma",
+        "raciocinio",
+    ],
+]
+
+
+# ============================================================
+# GRUPOS DE PERÍCIAS PARA EDIÇÃO
+# ============================================================
+
+GRUPOS_PERICIAS_EDICAO = [
+    ORDEM_PERICIAS[0:5],
+    ORDEM_PERICIAS[5:10],
+    ORDEM_PERICIAS[10:15],
+    ORDEM_PERICIAS[15:20],
+    ORDEM_PERICIAS[20:23],
+]
+
+
+# ============================================================
+# BUSCAR FICHA DO JOGADOR
 # ============================================================
 
 def buscar_ficha_jogador(
@@ -43,7 +74,7 @@ def buscar_ficha_jogador(
 
 
 # ============================================================
-# BUSCAR FICHA POR ID
+# BUSCAR FICHA
 # ============================================================
 
 def buscar_ficha(
@@ -71,17 +102,7 @@ def transformar_ficha(
 ):
 
     if dados is None:
-
         return None
-
-    # ========================================================
-    # IMPORTANTE
-    #
-    # O banco já passou por migrações.
-    #
-    # Por isso NÃO podemos assumir que a ordem física das
-    # colunas seja igual à ordem lógica esperada pelo código.
-    # ========================================================
 
     cursor.execute(
         "PRAGMA table_info(fichas)"
@@ -93,8 +114,7 @@ def transformar_ficha(
 
     colunas_reais = [
         coluna[1]
-        for coluna
-        in informacoes_colunas
+        for coluna in informacoes_colunas
     ]
 
     ficha = {}
@@ -107,17 +127,28 @@ def transformar_ficha(
             colunas_reais
         ):
 
-            nome_coluna = (
-                colunas_reais[
-                    indice
-                ]
-            )
-
             ficha[
-                nome_coluna
+                colunas_reais[indice]
             ] = valor
 
     return ficha
+
+
+# ============================================================
+# RECARREGAR FICHA
+# ============================================================
+
+def recarregar_ficha(
+    ficha_id
+):
+
+    dados = buscar_ficha(
+        ficha_id
+    )
+
+    return transformar_ficha(
+        dados
+    )
 
 
 # ============================================================
@@ -168,7 +199,7 @@ def atualizar_mana(
 
 def adicionar_xp(
     ficha_id,
-    valor
+    quantidade
 ):
 
     cursor.execute("""
@@ -176,7 +207,7 @@ def adicionar_xp(
         SET xp = xp + ?
         WHERE id = ?
     """, (
-        valor,
+        quantidade,
         ficha_id
     ))
 
@@ -202,7 +233,7 @@ def deletar_ficha(
 
 
 # ============================================================
-# REFLEXO DE COMBATE
+# CALCULAR RC
 # ============================================================
 
 def calcular_rc(
@@ -214,11 +245,13 @@ def calcular_rc(
             "esquiva",
             0
         )
-        + ficha.get(
+        +
+        ficha.get(
             "destreza",
             0
         )
-        + 5
+        +
+        5
     )
 
 
@@ -239,16 +272,13 @@ def estado_hp(
         return "⚫ INCAPACITADO"
 
     percentual = (
-        atual
-        / maximo
+        atual / maximo
     ) * 100
 
     if percentual < 30:
-
         return "🔴 CRÍTICO"
 
     if percentual <= 40:
-
         return "🟡 FERIDO"
 
     return "🟢 ESTÁVEL"
@@ -271,16 +301,13 @@ def estado_mana(
         return "⚫ ESGOTADA"
 
     percentual = (
-        atual
-        / maximo
+        atual / maximo
     ) * 100
 
     if percentual < 30:
-
         return "🔴 CRÍTICA"
 
     if percentual <= 40:
-
         return "🟡 BAIXA"
 
     return "🟢 PLENA"
@@ -295,12 +322,9 @@ def estado_recurso(
     maximo
 ):
 
-    if maximo <= 0:
-
-        return "0/0"
-
     return (
-        f"{atual}/{maximo}"
+        atual,
+        maximo
     )
 
 
@@ -314,91 +338,50 @@ def pode_alterar_ficha(
 ):
 
     if ficha is None:
-
         return False
-
-    # ========================================================
-    # ADMIN
-    # ========================================================
 
     if eh_admin(
         interaction
     ):
-
         return True
 
-    tipo = ficha.get(
-        "tipo"
-    )
-
-    # ========================================================
-    # JOGADOR
-    # ========================================================
-
-    if tipo == "jogador":
+    if (
+        ficha.get("tipo")
+        == "jogador"
+    ):
 
         if (
-            ficha.get(
-                "dono_id"
-            )
+            ficha.get("dono_id")
             == interaction.user.id
         ):
-
             return True
 
         if eh_mestre(
             interaction
         ):
-
             return True
 
         return False
 
-    # ========================================================
-    # NPC
-    # ========================================================
-
-    if tipo == "npc":
+    if (
+        ficha.get("tipo")
+        == "npc"
+    ):
 
         if eh_mestre(
             interaction
         ):
-
             return True
 
         if (
-            ficha.get(
-                "mestre_id"
-            )
+            ficha.get("mestre_id")
             == interaction.user.id
         ):
-
             return True
 
         return False
 
     return False
-
-
-# ============================================================
-# RECARREGAR FICHA
-# ============================================================
-
-def recarregar_ficha(
-    ficha_id
-):
-
-    dados = buscar_ficha(
-        ficha_id
-    )
-
-    if dados is None:
-
-        return None
-
-    return transformar_ficha(
-        dados
-    )
 
 
 # ============================================================
@@ -411,13 +394,14 @@ def formatar_atributos(
 
     return (
         f"💪 For: **{ficha.get('forca', 0)}**"
-        f"  🏹 Des: **{ficha.get('destreza', 0)}**\n"
-
+        f"  "
+        f"🏹 Des: **{ficha.get('destreza', 0)}**\n"
         f"🛡️ Vig: **{ficha.get('vigor', 0)}**"
-        f"  🧠 Int: **{ficha.get('inteligencia', 0)}**\n"
-
+        f"  "
+        f"🧠 Int: **{ficha.get('inteligencia', 0)}**\n"
         f"🎭 Car: **{ficha.get('carisma', 0)}**"
-        f"  💡 Rac: **{ficha.get('raciocinio', 0)}**"
+        f"  "
+        f"💡 Rac: **{ficha.get('raciocinio', 0)}**"
     )
 
 
@@ -494,20 +478,6 @@ def criar_pagina_status(
         ficha
     )
 
-    estado_atual_hp = (
-        estado_hp(
-            hp_atual,
-            hp_max
-        )
-    )
-
-    estado_atual_mana = (
-        estado_mana(
-            mana_atual,
-            mana_max
-        )
-    )
-
     embed = discord.Embed(
         title=(
             f"📜 FICHA DE "
@@ -516,28 +486,21 @@ def criar_pagina_status(
         color=discord.Color.dark_red()
     )
 
-    # ========================================================
-    # STATUS
-    # ========================================================
+    status = (
+        f"❤️ HP: **{hp_atual}/{hp_max}**"
+        f" • {estado_hp(hp_atual, hp_max)}\n"
+        f"🔵 Mana: **{mana_atual}/{mana_max}**"
+        f" • {estado_mana(mana_atual, mana_max)}\n"
+        f"✨ XP: **{xp}**"
+        f"  "
+        f"⚡ RC: **{rc}**"
+    )
 
     embed.add_field(
         name="❤️ STATUS",
-        value=(
-            f"❤️ HP: **{hp_atual}/{hp_max}** "
-            f"• {estado_atual_hp}\n"
-
-            f"🔵 Mana: **{mana_atual}/{mana_max}** "
-            f"• {estado_atual_mana}\n"
-
-            f"✨ XP: **{xp}**    "
-            f"⚡ RC: **{rc}**"
-        ),
+        value=status,
         inline=False
     )
-
-    # ========================================================
-    # ATRIBUTOS
-    # ========================================================
 
     embed.add_field(
         name="⚔️ ATRIBUTOS",
@@ -547,18 +510,14 @@ def criar_pagina_status(
         inline=False
     )
 
-    # ========================================================
-    # RODAPÉ
-    # ========================================================
-
     if jogador is not None:
 
         embed.set_footer(
             text=(
                 f"Jogador: "
                 f"{jogador.display_name}"
-                f" • Página 1/2 "
-                f"• Status e Atributos"
+                f" • Página 1/2"
+                f" • Status e Atributos"
             )
         )
 
@@ -566,8 +525,8 @@ def criar_pagina_status(
 
         embed.set_footer(
             text=(
-                "Página 1/2 "
-                "• Status e Atributos"
+                "Página 1/2"
+                " • Status e Atributos"
             )
         )
 
@@ -600,27 +559,13 @@ def criar_pagina_pericias(
         ficha
     )
 
-    # ========================================================
-    # UMA COLUNA
-    # ========================================================
-
-    texto = "\n".join(
-        linhas
-    )
-
     embed.add_field(
         name="📚 PERÍCIAS",
-        value=(
-            texto
-            if texto
-            else "Nenhuma perícia."
+        value="\n".join(
+            linhas
         ),
         inline=False
     )
-
-    # ========================================================
-    # RODAPÉ
-    # ========================================================
 
     if jogador is not None:
 
@@ -628,8 +573,8 @@ def criar_pagina_pericias(
             text=(
                 f"Jogador: "
                 f"{jogador.display_name}"
-                f" • Página 2/2 "
-                f"• Perícias"
+                f" • Página 2/2"
+                f" • Perícias"
             )
         )
 
@@ -637,8 +582,8 @@ def criar_pagina_pericias(
 
         embed.set_footer(
             text=(
-                "Página 2/2 "
-                "• Perícias"
+                "Página 2/2"
+                " • Perícias"
             )
         )
 
@@ -646,11 +591,39 @@ def criar_pagina_pericias(
 
 
 # ============================================================
-# MODAL — EDITAR RECURSOS
+# ATUALIZAR VIEW
+# ============================================================
+
+def atualizar_view_ficha(
+    view_ficha,
+    ficha_id
+):
+
+    if view_ficha is None:
+        return None
+
+    ficha_atualizada = (
+        recarregar_ficha(
+            ficha_id
+        )
+    )
+
+    if ficha_atualizada:
+
+        view_ficha.ficha = (
+            ficha_atualizada
+        )
+
+    return ficha_atualizada
+
+
+# ============================================================
+# MODAL RECURSOS
 # ============================================================
 
 class EditarRecursosModal(
-    discord.ui.Modal
+    discord.ui.Modal,
+    title="Editar recursos"
 ):
 
     def __init__(
@@ -659,67 +632,53 @@ class EditarRecursosModal(
         view_ficha=None
     ):
 
-        super().__init__(
-            title="Editar recursos"
-        )
+        super().__init__()
 
         self.ficha = ficha
         self.view_ficha = view_ficha
 
-        self.hp_atual = (
-            discord.ui.TextInput(
-                label="HP atual",
-                default=str(
-                    ficha.get(
-                        "hp_atual",
-                        0
-                    )
-                ),
-                required=True,
-                max_length=10
-            )
+        self.hp_atual = discord.ui.TextInput(
+            label="HP atual",
+            default=str(
+                ficha.get(
+                    "hp_atual",
+                    0
+                )
+            ),
+            required=True
         )
 
-        self.hp_max = (
-            discord.ui.TextInput(
-                label="HP máximo",
-                default=str(
-                    ficha.get(
-                        "hp_max",
-                        0
-                    )
-                ),
-                required=True,
-                max_length=10
-            )
+        self.hp_max = discord.ui.TextInput(
+            label="HP máximo",
+            default=str(
+                ficha.get(
+                    "hp_max",
+                    0
+                )
+            ),
+            required=True
         )
 
-        self.mana_atual = (
-            discord.ui.TextInput(
-                label="Mana atual",
-                default=str(
-                    ficha.get(
-                        "mana_atual",
-                        0
-                    )
-                ),
-                required=True,
-                max_length=10
-            )
+        self.mana_atual = discord.ui.TextInput(
+            label="Mana atual",
+            default=str(
+                ficha.get(
+                    "mana_atual",
+                    0
+                )
+            ),
+            required=True
         )
 
-        self.mana_max = (
-            discord.ui.TextInput(
-                label="Mana máxima",
-                default=str(
-                    ficha.get(
-                        "mana_max",
-                        0
-                    )
-                ),
-                required=True,
-                max_length=10
-            )
+        self.mana_max = discord.ui.TextInput(
+            label="Mana máxima",
+            default=str(
+                ficha.get(
+                    "mana_max",
+                    0
+                )
+            ),
+            required=True
         )
 
         self.add_item(
@@ -744,18 +703,14 @@ class EditarRecursosModal(
         interaction: discord.Interaction
     ):
 
-        ficha_atual = (
-            recarregar_ficha(
-                self.ficha[
-                    "id"
-                ]
-            )
+        ficha_atual = recarregar_ficha(
+            self.ficha["id"]
         )
 
         if ficha_atual is None:
 
             await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
+                "❌ Esta ficha não existe mais.",
                 ephemeral=True
             )
 
@@ -767,7 +722,7 @@ class EditarRecursosModal(
         ):
 
             await interaction.response.send_message(
-                "❌ Você não pode alterar essa ficha.",
+                "❌ Você não possui permissão para alterar esta ficha.",
                 ephemeral=True
             )
 
@@ -775,220 +730,161 @@ class EditarRecursosModal(
 
         try:
 
-            novo_hp_atual = int(
+            hp_atual = int(
                 self.hp_atual.value
             )
 
-            novo_hp_max = int(
+            hp_max = int(
                 self.hp_max.value
             )
 
-            nova_mana_atual = int(
+            mana_atual = int(
                 self.mana_atual.value
             )
 
-            nova_mana_max = int(
+            mana_max = int(
                 self.mana_max.value
             )
 
         except ValueError:
 
             await interaction.response.send_message(
-                "❌ Todos os valores precisam "
-                "ser números inteiros.",
+                "❌ HP e Mana precisam ser números inteiros.",
                 ephemeral=True
             )
 
             return
 
-        if novo_hp_max <= 0:
+        if hp_max <= 0:
 
             await interaction.response.send_message(
-                "❌ O HP máximo precisa ser "
-                "maior que 0.",
+                "❌ O HP máximo precisa ser maior que 0.",
                 ephemeral=True
             )
 
             return
 
         if (
-            novo_hp_atual < 0
-            or novo_hp_atual > novo_hp_max
+            hp_atual < 0
+            or hp_atual > hp_max
         ):
 
             await interaction.response.send_message(
-                "❌ O HP atual precisa estar "
-                "entre 0 e o HP máximo.",
+                "❌ O HP atual precisa estar entre 0 e o HP máximo.",
                 ephemeral=True
             )
 
             return
 
-        if nova_mana_max < 0:
+        if mana_max < 0:
 
             await interaction.response.send_message(
-                "❌ A Mana máxima não pode "
-                "ser negativa.",
+                "❌ A Mana máxima não pode ser negativa.",
                 ephemeral=True
             )
 
             return
 
         if (
-            nova_mana_atual < 0
-            or nova_mana_atual
-            > nova_mana_max
+            mana_atual < 0
+            or mana_atual > mana_max
         ):
 
             await interaction.response.send_message(
-                "❌ A Mana atual precisa estar "
-                "entre 0 e a Mana máxima.",
+                "❌ A Mana atual precisa estar entre 0 e a Mana máxima.",
                 ephemeral=True
             )
 
             return
 
-        antigo_hp_atual = (
-            ficha_atual.get(
-                "hp_atual",
-                0
-            )
-        )
+        anteriores = {
+            "hp_atual": ficha_atual["hp_atual"],
+            "hp_max": ficha_atual["hp_max"],
+            "mana_atual": ficha_atual["mana_atual"],
+            "mana_max": ficha_atual["mana_max"],
+        }
 
-        antigo_hp_max = (
-            ficha_atual.get(
-                "hp_max",
-                0
-            )
-        )
-
-        antiga_mana_atual = (
-            ficha_atual.get(
-                "mana_atual",
-                0
-            )
-        )
-
-        antiga_mana_max = (
-            ficha_atual.get(
-                "mana_max",
-                0
-            )
-        )
+        novos = {
+            "hp_atual": hp_atual,
+            "hp_max": hp_max,
+            "mana_atual": mana_atual,
+            "mana_max": mana_max,
+        }
 
         cursor.execute("""
             UPDATE fichas
-            SET hp_atual = ?,
+            SET
+                hp_atual = ?,
                 hp_max = ?,
                 mana_atual = ?,
                 mana_max = ?
             WHERE id = ?
         """, (
-            novo_hp_atual,
-            novo_hp_max,
-            nova_mana_atual,
-            nova_mana_max,
+            hp_atual,
+            hp_max,
+            mana_atual,
+            mana_max,
             ficha_atual["id"]
         ))
 
         db.commit()
 
-        # ====================================================
-        # HISTÓRICO
-        # ====================================================
+        for campo, valor_novo in novos.items():
 
-        mudancas = [
-            (
-                "hp_atual",
-                antigo_hp_atual,
-                novo_hp_atual
-            ),
-            (
-                "hp_max",
-                antigo_hp_max,
-                novo_hp_max
-            ),
-            (
-                "mana_atual",
-                antiga_mana_atual,
-                nova_mana_atual
-            ),
-            (
-                "mana_max",
-                antiga_mana_max,
-                nova_mana_max
-            ),
-        ]
+            valor_anterior = anteriores[
+                campo
+            ]
 
-        for (
-            campo,
-            anterior,
-            novo
-        ) in mudancas:
-
-            if anterior == novo:
-
+            if (
+                valor_anterior
+                == valor_novo
+            ):
                 continue
 
             registrar_historico(
-                interaction.channel.id,
+                ficha_atual["channel_id"],
                 ficha_atual["id"],
                 ficha_atual["nome"],
                 ficha_atual["tipo"],
                 interaction.user.id,
                 "recursos",
                 campo=campo,
-                valor_anterior=anterior,
-                valor_novo=novo,
+                valor_anterior=valor_anterior,
+                valor_novo=valor_novo,
                 descricao=(
-                    "⚙️ Alterado pelo "
-                    "menu de edição da ficha."
+                    "⚙️ Alterado pelo menu "
+                    "de edição da ficha."
                 )
             )
 
-        ficha_nova = (
-            recarregar_ficha(
-                ficha_atual[
-                    "id"
-                ]
-            )
+        ficha_nova = atualizar_view_ficha(
+            self.view_ficha,
+            ficha_atual["id"]
         )
 
-        if (
-            self.view_ficha
-            is not None
-            and ficha_nova
-            is not None
-        ):
+        if ficha_nova is None:
 
-            self.view_ficha.ficha = (
-                ficha_nova
+            ficha_nova = recarregar_ficha(
+                ficha_atual["id"]
             )
 
         await interaction.response.send_message(
-            f"✅ Recursos de "
-            f"**{ficha_atual['nome']}** "
-            f"atualizados.\n\n"
-
-            f"❤️ HP: "
-            f"**{novo_hp_atual}/{novo_hp_max}** "
-            f"• "
-            f"{estado_hp(novo_hp_atual, novo_hp_max)}\n"
-
-            f"🔵 Mana: "
-            f"**{nova_mana_atual}/{nova_mana_max}** "
-            f"• "
-            f"{estado_mana(nova_mana_atual, nova_mana_max)}",
+            "✅ **Recursos atualizados.**\n\n"
+            f"❤️ HP: **{ficha_nova['hp_atual']}/{ficha_nova['hp_max']}** "
+            f"• {estado_hp(ficha_nova['hp_atual'], ficha_nova['hp_max'])}\n"
+            f"🔵 Mana: **{ficha_nova['mana_atual']}/{ficha_nova['mana_max']}** "
+            f"• {estado_mana(ficha_nova['mana_atual'], ficha_nova['mana_max'])}",
             ephemeral=True
         )
 
 
 # ============================================================
-# MODAL — EDITAR XP
+# MODAL XP
 # ============================================================
 
 class EditarXPModal(
-    discord.ui.Modal
+    discord.ui.Modal,
+    title="Editar XP"
 ):
 
     def __init__(
@@ -997,29 +893,24 @@ class EditarXPModal(
         view_ficha=None
     ):
 
-        super().__init__(
-            title="Editar XP"
-        )
+        super().__init__()
 
         self.ficha = ficha
         self.view_ficha = view_ficha
 
-        self.valor = (
-            discord.ui.TextInput(
-                label="XP atual",
-                default=str(
-                    ficha.get(
-                        "xp",
-                        0
-                    )
-                ),
-                required=True,
-                max_length=10
-            )
+        self.xp = discord.ui.TextInput(
+            label="XP atual",
+            default=str(
+                ficha.get(
+                    "xp",
+                    0
+                )
+            ),
+            required=True
         )
 
         self.add_item(
-            self.valor
+            self.xp
         )
 
 
@@ -1028,18 +919,14 @@ class EditarXPModal(
         interaction: discord.Interaction
     ):
 
-        ficha_atual = (
-            recarregar_ficha(
-                self.ficha[
-                    "id"
-                ]
-            )
+        ficha_atual = recarregar_ficha(
+            self.ficha["id"]
         )
 
         if ficha_atual is None:
 
             await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
+                "❌ Esta ficha não existe mais.",
                 ephemeral=True
             )
 
@@ -1051,7 +938,7 @@ class EditarXPModal(
         ):
 
             await interaction.response.send_message(
-                "❌ Você não pode alterar essa ficha.",
+                "❌ Você não possui permissão para alterar esta ficha.",
                 ephemeral=True
             )
 
@@ -1060,14 +947,13 @@ class EditarXPModal(
         try:
 
             novo_xp = int(
-                self.valor.value
+                self.xp.value
             )
 
         except ValueError:
 
             await interaction.response.send_message(
-                "❌ O XP precisa ser um "
-                "número inteiro.",
+                "❌ O XP precisa ser um número inteiro.",
                 ephemeral=True
             )
 
@@ -1082,12 +968,7 @@ class EditarXPModal(
 
             return
 
-        xp_anterior = (
-            ficha_atual.get(
-                "xp",
-                0
-            )
-        )
+        xp_anterior = ficha_atual["xp"]
 
         cursor.execute("""
             UPDATE fichas
@@ -1103,7 +984,7 @@ class EditarXPModal(
         if xp_anterior != novo_xp:
 
             registrar_historico(
-                interaction.channel.id,
+                ficha_atual["channel_id"],
                 ficha_atual["id"],
                 ficha_atual["nome"],
                 ficha_atual["tipo"],
@@ -1113,86 +994,79 @@ class EditarXPModal(
                 valor_anterior=xp_anterior,
                 valor_novo=novo_xp,
                 descricao=(
-                    "⚙️ XP alterado pelo "
-                    "menu de edição da ficha."
+                    "✨ Alterado pelo menu "
+                    "de edição da ficha."
                 )
             )
 
-        ficha_nova = (
-            recarregar_ficha(
-                ficha_atual[
-                    "id"
-                ]
-            )
+        atualizar_view_ficha(
+            self.view_ficha,
+            ficha_atual["id"]
         )
 
-        if (
-            self.view_ficha
-            is not None
-            and ficha_nova
-            is not None
-        ):
-
-            self.view_ficha.ficha = (
-                ficha_nova
-            )
-
         await interaction.response.send_message(
-            f"✨ XP de "
-            f"**{ficha_atual['nome']}** "
-            f"alterado de "
-            f"**{xp_anterior}** para "
-            f"**{novo_xp}**.",
+            f"✅ XP atualizado para **{novo_xp}**.",
             ephemeral=True
         )
 
 
 # ============================================================
-# MODAL — EDITAR ATRIBUTO
+# MODAL ATRIBUTOS EM LOTE
 # ============================================================
 
-class EditarAtributoModal(
+class EditarAtributosModal(
     discord.ui.Modal
 ):
 
     def __init__(
         self,
         ficha,
-        atributo,
+        grupo,
         view_ficha=None
     ):
 
         self.ficha = ficha
-        self.atributo = atributo
+        self.grupo = grupo
         self.view_ficha = view_ficha
 
-        emoji, nome = (
-            ATRIBUTOS[
-                atributo
-            ]
-        )
+        campos = GRUPOS_ATRIBUTOS_EDICAO[
+            grupo
+        ]
 
         super().__init__(
-            title=f"Editar {nome}"
-        )
-
-        self.valor = (
-            discord.ui.TextInput(
-                label=nome,
-                default=str(
-                    ficha.get(
-                        atributo,
-                        0
-                    )
-                ),
-                required=True,
-                max_length=10
+            title=(
+                f"Editar atributos "
+                f"{grupo + 1}/"
+                f"{len(GRUPOS_ATRIBUTOS_EDICAO)}"
             )
         )
 
-        self.add_item(
-            self.valor
-        )
+        self.inputs = {}
+
+        for chave in campos:
+
+            emoji, nome = ATRIBUTOS[
+                chave
+            ]
+
+            campo = discord.ui.TextInput(
+                label=nome,
+                default=str(
+                    ficha.get(
+                        chave,
+                        0
+                    )
+                ),
+                required=True
+            )
+
+            self.inputs[
+                chave
+            ] = campo
+
+            self.add_item(
+                campo
+            )
 
 
     async def on_submit(
@@ -1200,18 +1074,14 @@ class EditarAtributoModal(
         interaction: discord.Interaction
     ):
 
-        ficha_atual = (
-            recarregar_ficha(
-                self.ficha[
-                    "id"
-                ]
-            )
+        ficha_atual = recarregar_ficha(
+            self.ficha["id"]
         )
 
         if ficha_atual is None:
 
             await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
+                "❌ Esta ficha não existe mais.",
                 ephemeral=True
             )
 
@@ -1223,158 +1093,264 @@ class EditarAtributoModal(
         ):
 
             await interaction.response.send_message(
-                "❌ Você não pode alterar essa ficha.",
+                "❌ Você não possui permissão para alterar esta ficha.",
                 ephemeral=True
             )
 
             return
 
+        valores = {}
+
         try:
 
-            novo_valor = int(
-                self.valor.value
-            )
+            for chave, campo in self.inputs.items():
+
+                valor = int(
+                    campo.value
+                )
+
+                if valor < 0:
+                    raise ValueError
+
+                valores[
+                    chave
+                ] = valor
 
         except ValueError:
 
             await interaction.response.send_message(
-                "❌ O valor precisa ser um "
-                "número inteiro.",
+                "❌ Todos os atributos precisam ser "
+                "números inteiros maiores ou iguais a 0.",
                 ephemeral=True
             )
 
             return
 
-        if novo_valor < 0:
+        alteracoes = []
 
-            await interaction.response.send_message(
-                "❌ O valor não pode ser negativo.",
-                ephemeral=True
-            )
+        for chave, valor_novo in valores.items():
 
-            return
-
-        valor_anterior = (
-            ficha_atual.get(
-                self.atributo,
+            valor_anterior = ficha_atual.get(
+                chave,
                 0
             )
-        )
 
-        cursor.execute(
-            f"""
-            UPDATE fichas
-            SET {self.atributo} = ?
-            WHERE id = ?
-            """,
-            (
-                novo_valor,
-                ficha_atual["id"]
+            if valor_anterior == valor_novo:
+                continue
+
+            cursor.execute(
+                f"""
+                UPDATE fichas
+                SET {chave} = ?
+                WHERE id = ?
+                """,
+                (
+                    valor_novo,
+                    ficha_atual["id"]
+                )
             )
-        )
+
+            alteracoes.append(
+                (
+                    chave,
+                    valor_anterior,
+                    valor_novo
+                )
+            )
 
         db.commit()
 
-        if (
-            valor_anterior
-            != novo_valor
-        ):
+        for (
+            chave,
+            valor_anterior,
+            valor_novo
+        ) in alteracoes:
 
             registrar_historico(
-                interaction.channel.id,
+                ficha_atual["channel_id"],
                 ficha_atual["id"],
                 ficha_atual["nome"],
                 ficha_atual["tipo"],
                 interaction.user.id,
                 "atributo",
-                campo=self.atributo,
+                campo=chave,
                 valor_anterior=valor_anterior,
-                valor_novo=novo_valor,
+                valor_novo=valor_novo,
                 descricao=(
-                    "⚙️ Atributo alterado pelo "
-                    "menu de edição da ficha."
+                    "⚔️ Alterado pelo formulário "
+                    "de atributos da ficha."
                 )
             )
 
-        ficha_nova = (
-            recarregar_ficha(
-                ficha_atual[
-                    "id"
-                ]
-            )
+        ficha_nova = atualizar_view_ficha(
+            self.view_ficha,
+            ficha_atual["id"]
         )
+
+        if ficha_nova is None:
+
+            ficha_nova = recarregar_ficha(
+                ficha_atual["id"]
+            )
+
+        proximo = self.grupo + 1
 
         if (
-            self.view_ficha
-            is not None
-            and ficha_nova
-            is not None
+            proximo
+            < len(
+                GRUPOS_ATRIBUTOS_EDICAO
+            )
         ):
 
-            self.view_ficha.ficha = (
-                ficha_nova
+            await interaction.response.send_message(
+                f"✅ Atributos "
+                f"{self.grupo + 1}/"
+                f"{len(GRUPOS_ATRIBUTOS_EDICAO)} "
+                f"salvos.\n\n"
+                f"Clique abaixo para continuar.",
+                view=ViewContinuarEdicaoAtributos(
+                    ficha_nova,
+                    proximo,
+                    self.view_ficha
+                ),
+                ephemeral=True
             )
 
-        emoji, nome = (
-            ATRIBUTOS[
-                self.atributo
-            ]
-        )
+            return
 
         await interaction.response.send_message(
-            f"{emoji} **{nome}** alterado de "
-            f"**{valor_anterior}** para "
-            f"**{novo_valor}**.",
+            "✅ Todos os atributos foram atualizados.",
             ephemeral=True
         )
 
 
 # ============================================================
-# MODAL — EDITAR PERÍCIA
+# CONTINUAR ATRIBUTOS
 # ============================================================
 
-class EditarPericiaModal(
+class ViewContinuarEdicaoAtributos(
+    discord.ui.View
+):
+
+    def __init__(
+        self,
+        ficha,
+        grupo,
+        view_ficha=None
+    ):
+
+        super().__init__(
+            timeout=300
+        )
+
+        self.ficha = ficha
+        self.grupo = grupo
+        self.view_ficha = view_ficha
+
+
+    @discord.ui.button(
+        label="➡️ Continuar atributos",
+        style=discord.ButtonStyle.primary
+    )
+    async def continuar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        ficha_atual = recarregar_ficha(
+            self.ficha["id"]
+        )
+
+        if ficha_atual is None:
+
+            await interaction.response.send_message(
+                "❌ Esta ficha não existe mais.",
+                ephemeral=True
+            )
+
+            return
+
+        if not pode_alterar_ficha(
+            interaction,
+            ficha_atual
+        ):
+
+            await interaction.response.send_message(
+                "❌ Você não possui permissão para alterar esta ficha.",
+                ephemeral=True
+            )
+
+            return
+
+        await interaction.response.send_modal(
+            EditarAtributosModal(
+                ficha_atual,
+                self.grupo,
+                self.view_ficha
+            )
+        )
+
+
+# ============================================================
+# MODAL PERÍCIAS EM LOTE
+# TODAS AS FICHAS: 0 A 5
+# ============================================================
+
+class EditarPericiasModal(
     discord.ui.Modal
 ):
 
     def __init__(
         self,
         ficha,
-        pericia,
+        grupo,
         view_ficha=None
     ):
 
         self.ficha = ficha
-        self.pericia = pericia
+        self.grupo = grupo
         self.view_ficha = view_ficha
 
-        emoji, nome = (
-            PERICIAS[
-                pericia
-            ]
-        )
+        campos = GRUPOS_PERICIAS_EDICAO[
+            grupo
+        ]
 
         super().__init__(
-            title=f"Editar {nome}"[:45]
-        )
-
-        self.valor = (
-            discord.ui.TextInput(
-                label=nome[:45],
-                default=str(
-                    ficha.get(
-                        pericia,
-                        0
-                    )
-                ),
-                required=True,
-                max_length=10
+            title=(
+                f"Editar perícias "
+                f"{grupo + 1}/"
+                f"{len(GRUPOS_PERICIAS_EDICAO)}"
             )
         )
 
-        self.add_item(
-            self.valor
-        )
+        self.inputs = {}
+
+        for chave in campos:
+
+            emoji, nome = PERICIAS[
+                chave
+            ]
+
+            campo = discord.ui.TextInput(
+                label=nome[:45],
+                placeholder="Valor de 0 a 5",
+                default=str(
+                    ficha.get(
+                        chave,
+                        0
+                    )
+                ),
+                required=True
+            )
+
+            self.inputs[
+                chave
+            ] = campo
+
+            self.add_item(
+                campo
+            )
 
 
     async def on_submit(
@@ -1382,18 +1358,14 @@ class EditarPericiaModal(
         interaction: discord.Interaction
     ):
 
-        ficha_atual = (
-            recarregar_ficha(
-                self.ficha[
-                    "id"
-                ]
-            )
+        ficha_atual = recarregar_ficha(
+            self.ficha["id"]
         )
 
         if ficha_atual is None:
 
             await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
+                "❌ Esta ficha não existe mais.",
                 ephemeral=True
             )
 
@@ -1405,173 +1377,183 @@ class EditarPericiaModal(
         ):
 
             await interaction.response.send_message(
-                "❌ Você não pode alterar essa ficha.",
+                "❌ Você não possui permissão para alterar esta ficha.",
                 ephemeral=True
             )
 
             return
 
+        valores = {}
+
         try:
 
-            novo_valor = int(
-                self.valor.value
-            )
+            for chave, campo in self.inputs.items():
+
+                valor = int(
+                    campo.value
+                )
+
+                if (
+                    valor < 0
+                    or valor > 5
+                ):
+
+                    raise ValueError
+
+                valores[
+                    chave
+                ] = valor
 
         except ValueError:
 
             await interaction.response.send_message(
-                "❌ O valor precisa ser um "
-                "número inteiro.",
+                "❌ Todas as perícias precisam ser "
+                "números inteiros entre **0 e 5**.",
                 ephemeral=True
             )
 
             return
 
-        if novo_valor < 0:
+        alteracoes = []
 
-            await interaction.response.send_message(
-                "❌ O valor não pode ser negativo.",
-                ephemeral=True
-            )
+        for chave, valor_novo in valores.items():
 
-            return
-
-        valor_anterior = (
-            ficha_atual.get(
-                self.pericia,
+            valor_anterior = ficha_atual.get(
+                chave,
                 0
             )
-        )
 
-        cursor.execute(
-            f"""
-            UPDATE fichas
-            SET {self.pericia} = ?
-            WHERE id = ?
-            """,
-            (
-                novo_valor,
-                ficha_atual["id"]
+            if valor_anterior == valor_novo:
+                continue
+
+            cursor.execute(
+                f"""
+                UPDATE fichas
+                SET {chave} = ?
+                WHERE id = ?
+                """,
+                (
+                    valor_novo,
+                    ficha_atual["id"]
+                )
             )
-        )
+
+            alteracoes.append(
+                (
+                    chave,
+                    valor_anterior,
+                    valor_novo
+                )
+            )
 
         db.commit()
 
-        if (
-            valor_anterior
-            != novo_valor
-        ):
+        for (
+            chave,
+            valor_anterior,
+            valor_novo
+        ) in alteracoes:
 
             registrar_historico(
-                interaction.channel.id,
+                ficha_atual["channel_id"],
                 ficha_atual["id"],
                 ficha_atual["nome"],
                 ficha_atual["tipo"],
                 interaction.user.id,
                 "pericia",
-                campo=self.pericia,
+                campo=chave,
                 valor_anterior=valor_anterior,
-                valor_novo=novo_valor,
+                valor_novo=valor_novo,
                 descricao=(
-                    "⚙️ Perícia alterada pelo "
-                    "menu de edição da ficha."
+                    "📚 Alterada pelo formulário "
+                    "de perícias da ficha."
                 )
             )
 
-        ficha_nova = (
-            recarregar_ficha(
-                ficha_atual[
-                    "id"
-                ]
-            )
+        ficha_nova = atualizar_view_ficha(
+            self.view_ficha,
+            ficha_atual["id"]
         )
+
+        if ficha_nova is None:
+
+            ficha_nova = recarregar_ficha(
+                ficha_atual["id"]
+            )
+
+        proximo = self.grupo + 1
 
         if (
-            self.view_ficha
-            is not None
-            and ficha_nova
-            is not None
+            proximo
+            < len(
+                GRUPOS_PERICIAS_EDICAO
+            )
         ):
 
-            self.view_ficha.ficha = (
-                ficha_nova
+            await interaction.response.send_message(
+                f"✅ Perícias "
+                f"{self.grupo + 1}/"
+                f"{len(GRUPOS_PERICIAS_EDICAO)} "
+                f"salvas.\n\n"
+                f"Clique abaixo para continuar.",
+                view=ViewContinuarEdicaoPericias(
+                    ficha_nova,
+                    proximo,
+                    self.view_ficha
+                ),
+                ephemeral=True
             )
 
-        emoji, nome = (
-            PERICIAS[
-                self.pericia
-            ]
-        )
+            return
 
         await interaction.response.send_message(
-            f"{emoji} **{nome}** alterada de "
-            f"**{valor_anterior}** para "
-            f"**{novo_valor}**.",
+            "✅ Todas as perícias foram atualizadas.",
             ephemeral=True
         )
 
 
 # ============================================================
-# SELECT — ATRIBUTO
+# CONTINUAR PERÍCIAS
 # ============================================================
 
-class EditarAtributoSelect(
-    discord.ui.Select
+class ViewContinuarEdicaoPericias(
+    discord.ui.View
 ):
 
     def __init__(
         self,
         ficha,
+        grupo,
         view_ficha=None
     ):
 
-        self.ficha = ficha
-        self.view_ficha = view_ficha
-
-        opcoes = []
-
-        for chave, (
-            emoji,
-            nome
-        ) in ATRIBUTOS.items():
-
-            opcoes.append(
-                discord.SelectOption(
-                    label=nome,
-                    value=chave,
-                    emoji=emoji,
-                    description=(
-                        f"Valor atual: "
-                        f"{ficha.get(chave, 0)}"
-                    )
-                )
-            )
-
         super().__init__(
-            placeholder="Escolha o atributo...",
-            min_values=1,
-            max_values=1,
-            options=opcoes
+            timeout=300
         )
 
+        self.ficha = ficha
+        self.grupo = grupo
+        self.view_ficha = view_ficha
 
-    async def callback(
+
+    @discord.ui.button(
+        label="➡️ Continuar perícias",
+        style=discord.ButtonStyle.primary
+    )
+    async def continuar(
         self,
-        interaction: discord.Interaction
+        interaction: discord.Interaction,
+        button: discord.ui.Button
     ):
 
-        ficha_atual = (
-            recarregar_ficha(
-                self.ficha[
-                    "id"
-                ]
-            )
+        ficha_atual = recarregar_ficha(
+            self.ficha["id"]
         )
 
         if ficha_atual is None:
 
             await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
+                "❌ Esta ficha não existe mais.",
                 ephemeral=True
             )
 
@@ -1583,165 +1565,23 @@ class EditarAtributoSelect(
         ):
 
             await interaction.response.send_message(
-                "❌ Você não pode alterar essa ficha.",
+                "❌ Você não possui permissão para alterar esta ficha.",
                 ephemeral=True
             )
 
             return
 
         await interaction.response.send_modal(
-            EditarAtributoModal(
+            EditarPericiasModal(
                 ficha_atual,
-                self.values[0],
+                self.grupo,
                 self.view_ficha
             )
         )
 
 
 # ============================================================
-# VIEW — ATRIBUTOS
-# ============================================================
-
-class EditarAtributoView(
-    discord.ui.View
-):
-
-    def __init__(
-        self,
-        ficha,
-        view_ficha=None
-    ):
-
-        super().__init__(
-            timeout=180
-        )
-
-        self.add_item(
-            EditarAtributoSelect(
-                ficha,
-                view_ficha
-            )
-        )
-
-
-# ============================================================
-# SELECT — PERÍCIA
-# ============================================================
-
-class EditarPericiaSelect(
-    discord.ui.Select
-):
-
-    def __init__(
-        self,
-        ficha,
-        view_ficha=None
-    ):
-
-        self.ficha = ficha
-        self.view_ficha = view_ficha
-
-        opcoes = []
-
-        for chave in ORDEM_PERICIAS:
-
-            emoji, nome = (
-                PERICIAS[
-                    chave
-                ]
-            )
-
-            opcoes.append(
-                discord.SelectOption(
-                    label=nome[:100],
-                    value=chave,
-                    emoji=emoji,
-                    description=(
-                        f"Valor atual: "
-                        f"{ficha.get(chave, 0)}"
-                    )[:100]
-                )
-            )
-
-        super().__init__(
-            placeholder="Escolha a perícia...",
-            min_values=1,
-            max_values=1,
-            options=opcoes
-        )
-
-
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
-
-        ficha_atual = (
-            recarregar_ficha(
-                self.ficha[
-                    "id"
-                ]
-            )
-        )
-
-        if ficha_atual is None:
-
-            await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
-                ephemeral=True
-            )
-
-            return
-
-        if not pode_alterar_ficha(
-            interaction,
-            ficha_atual
-        ):
-
-            await interaction.response.send_message(
-                "❌ Você não pode alterar essa ficha.",
-                ephemeral=True
-            )
-
-            return
-
-        await interaction.response.send_modal(
-            EditarPericiaModal(
-                ficha_atual,
-                self.values[0],
-                self.view_ficha
-            )
-        )
-
-
-# ============================================================
-# VIEW — PERÍCIAS
-# ============================================================
-
-class EditarPericiaView(
-    discord.ui.View
-):
-
-    def __init__(
-        self,
-        ficha,
-        view_ficha=None
-    ):
-
-        super().__init__(
-            timeout=180
-        )
-
-        self.add_item(
-            EditarPericiaSelect(
-                ficha,
-                view_ficha
-            )
-        )
-
-
-# ============================================================
-# SELECT — MENU PRINCIPAL DE EDIÇÃO
+# MENU DE EDIÇÃO
 # ============================================================
 
 class EditarFichaSelect(
@@ -1751,55 +1591,42 @@ class EditarFichaSelect(
     def __init__(
         self,
         ficha,
-        view_ficha
+        view_ficha=None
     ):
 
         self.ficha = ficha
         self.view_ficha = view_ficha
 
-        opcoes = [
-            discord.SelectOption(
-                label="Recursos",
-                value="recursos",
-                emoji="❤️",
-                description=(
-                    "Editar HP e Mana"
-                )
-            ),
-
-            discord.SelectOption(
-                label="XP",
-                value="xp",
-                emoji="✨",
-                description=(
-                    "Editar XP atual"
-                )
-            ),
-
-            discord.SelectOption(
-                label="Atributo",
-                value="atributo",
-                emoji="⚔️",
-                description=(
-                    "Editar um atributo"
-                )
-            ),
-
-            discord.SelectOption(
-                label="Perícia",
-                value="pericia",
-                emoji="📚",
-                description=(
-                    "Editar uma perícia"
-                )
-            ),
-        ]
-
         super().__init__(
             placeholder="O que deseja editar?",
             min_values=1,
             max_values=1,
-            options=opcoes
+            options=[
+                discord.SelectOption(
+                    label="Recursos",
+                    value="recursos",
+                    emoji="❤️",
+                    description="Editar HP e Mana"
+                ),
+                discord.SelectOption(
+                    label="XP",
+                    value="xp",
+                    emoji="✨",
+                    description="Editar XP"
+                ),
+                discord.SelectOption(
+                    label="Atributos",
+                    value="atributos",
+                    emoji="⚔️",
+                    description="Editar todos os atributos"
+                ),
+                discord.SelectOption(
+                    label="Perícias",
+                    value="pericias",
+                    emoji="📚",
+                    description="Editar todas as perícias"
+                ),
+            ]
         )
 
 
@@ -1808,18 +1635,14 @@ class EditarFichaSelect(
         interaction: discord.Interaction
     ):
 
-        ficha_atual = (
-            recarregar_ficha(
-                self.ficha[
-                    "id"
-                ]
-            )
+        ficha_atual = recarregar_ficha(
+            self.ficha["id"]
         )
 
         if ficha_atual is None:
 
             await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
+                "❌ Esta ficha não existe mais.",
                 ephemeral=True
             )
 
@@ -1831,19 +1654,13 @@ class EditarFichaSelect(
         ):
 
             await interaction.response.send_message(
-                "❌ Você não pode alterar essa ficha.",
+                "❌ Você não possui permissão para alterar esta ficha.",
                 ephemeral=True
             )
 
             return
 
-        escolha = (
-            self.values[0]
-        )
-
-        # ====================================================
-        # RECURSOS
-        # ====================================================
+        escolha = self.values[0]
 
         if escolha == "recursos":
 
@@ -1856,10 +1673,6 @@ class EditarFichaSelect(
 
             return
 
-        # ====================================================
-        # XP
-        # ====================================================
-
         if escolha == "xp":
 
             await interaction.response.send_modal(
@@ -1871,45 +1684,31 @@ class EditarFichaSelect(
 
             return
 
-        # ====================================================
-        # ATRIBUTO
-        # ====================================================
+        if escolha == "atributos":
 
-        if escolha == "atributo":
-
-            await interaction.response.send_message(
-                "⚔️ **Escolha o atributo "
-                "que deseja editar:**",
-                view=EditarAtributoView(
+            await interaction.response.send_modal(
+                EditarAtributosModal(
                     ficha_atual,
+                    0,
                     self.view_ficha
-                ),
-                ephemeral=True
+                )
             )
 
             return
 
-        # ====================================================
-        # PERÍCIA
-        # ====================================================
+        if escolha == "pericias":
 
-        if escolha == "pericia":
-
-            await interaction.response.send_message(
-                "📚 **Escolha a perícia "
-                "que deseja editar:**",
-                view=EditarPericiaView(
+            await interaction.response.send_modal(
+                EditarPericiasModal(
                     ficha_atual,
+                    0,
                     self.view_ficha
-                ),
-                ephemeral=True
+                )
             )
-
-            return
 
 
 # ============================================================
-# VIEW — MENU PRINCIPAL DE EDIÇÃO
+# VIEW DO MENU DE EDIÇÃO
 # ============================================================
 
 class EditarFichaView(
@@ -1919,11 +1718,11 @@ class EditarFichaView(
     def __init__(
         self,
         ficha,
-        view_ficha
+        view_ficha=None
     ):
 
         super().__init__(
-            timeout=180
+            timeout=300
         )
 
         self.add_item(
@@ -1959,9 +1758,20 @@ class FichaView(
         self.atualizar_botoes()
 
 
-    # ========================================================
-    # ATUALIZAR BOTÕES
-    # ========================================================
+    def atualizar_ficha(
+        self
+    ):
+
+        ficha_atualizada = recarregar_ficha(
+            self.ficha["id"]
+        )
+
+        if ficha_atualizada:
+
+            self.ficha = ficha_atualizada
+
+        return ficha_atualizada
+
 
     def atualizar_botoes(
         self
@@ -1976,35 +1786,6 @@ class FichaView(
         )
 
 
-    # ========================================================
-    # ATUALIZAR DADOS DA FICHA
-    # ========================================================
-
-    def atualizar_ficha(
-        self
-    ):
-
-        ficha_nova = (
-            recarregar_ficha(
-                self.ficha[
-                    "id"
-                ]
-            )
-        )
-
-        if ficha_nova is not None:
-
-            self.ficha = (
-                ficha_nova
-            )
-
-        return ficha_nova
-
-
-    # ========================================================
-    # STATUS
-    # ========================================================
-
     @discord.ui.button(
         label="◀ Status",
         style=discord.ButtonStyle.secondary,
@@ -2016,21 +1797,16 @@ class FichaView(
         button: discord.ui.Button
     ):
 
-        ficha_nova = (
-            self.atualizar_ficha()
-        )
-
-        if ficha_nova is None:
+        if self.atualizar_ficha() is None:
 
             await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
+                "❌ Esta ficha não existe mais.",
                 ephemeral=True
             )
 
             return
 
         self.pagina = 1
-
         self.atualizar_botoes()
 
         await interaction.response.edit_message(
@@ -2041,10 +1817,6 @@ class FichaView(
             view=self
         )
 
-
-    # ========================================================
-    # PERÍCIAS
-    # ========================================================
 
     @discord.ui.button(
         label="Perícias ▶",
@@ -2057,21 +1829,16 @@ class FichaView(
         button: discord.ui.Button
     ):
 
-        ficha_nova = (
-            self.atualizar_ficha()
-        )
-
-        if ficha_nova is None:
+        if self.atualizar_ficha() is None:
 
             await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
+                "❌ Esta ficha não existe mais.",
                 ephemeral=True
             )
 
             return
 
         self.pagina = 2
-
         self.atualizar_botoes()
 
         await interaction.response.edit_message(
@@ -2082,10 +1849,6 @@ class FichaView(
             view=self
         )
 
-
-    # ========================================================
-    # EDITAR
-    # ========================================================
 
     @discord.ui.button(
         label="✏️ Editar",
@@ -2098,14 +1861,10 @@ class FichaView(
         button: discord.ui.Button
     ):
 
-        ficha_nova = (
-            self.atualizar_ficha()
-        )
-
-        if ficha_nova is None:
+        if self.atualizar_ficha() is None:
 
             await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
+                "❌ Esta ficha não existe mais.",
                 ephemeral=True
             )
 
@@ -2117,16 +1876,24 @@ class FichaView(
         ):
 
             await interaction.response.send_message(
-                "❌ Você não pode alterar essa ficha.",
+                "❌ Você não possui permissão para alterar esta ficha.",
                 ephemeral=True
             )
 
             return
 
+        tipo_visual = (
+            "👹 NPC"
+            if self.ficha.get("tipo") == "npc"
+            else "👤 Jogador"
+        )
+
         await interaction.response.send_message(
-            f"✏️ **Editar ficha de "
-            f"{self.ficha['nome']}**\n\n"
-            f"Escolha abaixo o que deseja alterar.",
+            f"✏️ **Editar ficha**\n\n"
+            f"{tipo_visual}: "
+            f"**{self.ficha.get('nome', 'Sem nome')}**\n\n"
+            f"Escolha o tipo de informação "
+            f"que deseja alterar:",
             view=EditarFichaView(
                 self.ficha,
                 self
