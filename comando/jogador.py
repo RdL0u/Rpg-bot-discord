@@ -22,23 +22,35 @@ from fichas import (
 
 from config import (
     ATRIBUTOS,
-    PERICIAS
+    PERICIAS,
 )
 
 
 # ============================================================
-# PERMISSÕES
+# ADMIN
 # ============================================================
 
-def eh_admin(interaction):
+def eh_admin(
+    interaction
+):
 
     if interaction.guild is None:
         return False
 
-    return interaction.user.guild_permissions.administrator
+    return (
+        interaction.user
+        .guild_permissions
+        .administrator
+    )
 
 
-def eh_mestre(interaction):
+# ============================================================
+# MESTRE
+# ============================================================
+
+def eh_mestre(
+    interaction
+):
 
     if interaction.channel is None:
         return False
@@ -52,7 +64,7 @@ def eh_mestre(interaction):
 
 
 # ============================================================
-# BUSCAR FICHA PELO ID NO CANAL
+# BUSCAR FICHA PELO ID E CANAL
 # ============================================================
 
 def buscar_ficha_por_id(
@@ -63,421 +75,24 @@ def buscar_ficha_por_id(
     cursor.execute("""
         SELECT *
         FROM fichas
-        WHERE id = ?
-        AND channel_id = ?
+        WHERE channel_id = ?
+        AND id = ?
         LIMIT 1
     """, (
-        ficha_id,
-        channel_id
+        channel_id,
+        ficha_id
     ))
 
     return cursor.fetchone()
 
 
 # ============================================================
-# MODAL — APLICAR DANO
+# REGISTRAR COMANDOS
 # ============================================================
 
-class DanoModal(
-    discord.ui.Modal
+def registrar_comandos_jogador(
+    bot
 ):
-
-    def __init__(
-        self,
-        ficha_id,
-        autor_id
-    ):
-
-        super().__init__(
-            title="Aplicar dano"
-        )
-
-        self.ficha_id = ficha_id
-        self.autor_id = autor_id
-
-        self.valor = discord.ui.TextInput(
-            label="Quantidade de dano",
-            placeholder="Digite o valor do dano",
-            required=True,
-            max_length=10
-        )
-
-        self.add_item(
-            self.valor
-        )
-
-
-    async def on_submit(
-        self,
-        interaction: discord.Interaction
-    ):
-
-        # ====================================================
-        # SOMENTE QUEM INICIOU PODE CONTINUAR
-        # ====================================================
-
-        if (
-            interaction.user.id
-            != self.autor_id
-        ):
-
-            await interaction.response.send_message(
-                "❌ Somente quem iniciou a ação "
-                "pode aplicar o dano.",
-                ephemeral=True
-            )
-
-            return
-
-        # ====================================================
-        # VALIDAR VALOR
-        # ====================================================
-
-        try:
-
-            valor = int(
-                self.valor.value
-            )
-
-        except ValueError:
-
-            await interaction.response.send_message(
-                "❌ O dano precisa ser um número inteiro.",
-                ephemeral=True
-            )
-
-            return
-
-        if valor <= 0:
-
-            await interaction.response.send_message(
-                "❌ O dano precisa ser maior que 0.",
-                ephemeral=True
-            )
-
-            return
-
-        # ====================================================
-        # BUSCAR FICHA NOVAMENTE
-        # ====================================================
-
-        dados = buscar_ficha_por_id(
-            interaction.channel.id,
-            self.ficha_id
-        )
-
-        if dados is None:
-
-            await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
-                ephemeral=True
-            )
-
-            return
-
-        f = transformar_ficha(
-            dados
-        )
-
-        # ====================================================
-        # CALCULAR DANO
-        # ====================================================
-
-        hp_anterior = f[
-            "hp_atual"
-        ]
-
-        novo_hp = max(
-            0,
-            hp_anterior - valor
-        )
-
-        dano_real = (
-            hp_anterior
-            - novo_hp
-        )
-
-        # ====================================================
-        # NPC DERROTADO
-        # ====================================================
-
-        if (
-            f["tipo"] == "npc"
-            and novo_hp <= 0
-        ):
-
-            # ================================================
-            # REGISTRAR HISTÓRICO ANTES DE APAGAR O NPC
-            # ================================================
-
-            registrar_historico(
-                interaction.channel.id,
-                f["id"],
-                f["nome"],
-                f["tipo"],
-                interaction.user.id,
-                "npc_derrotado",
-                campo="hp",
-                valor_anterior=hp_anterior,
-                valor_novo=0,
-                descricao=(
-                    f"💥 {dano_real} de dano recebido. "
-                    f"🗑️ NPC derrotado e removido da mesa."
-                )
-            )
-
-            cursor.execute("""
-                DELETE FROM fichas
-                WHERE id = ?
-                AND channel_id = ?
-                AND tipo = 'npc'
-            """, (
-                f["id"],
-                interaction.channel.id
-            ))
-
-            db.commit()
-
-            await interaction.response.send_message(
-                f"💀 **NPC DERROTADO**\n\n"
-                f"**{f['nome']} #{f['id']}** recebeu "
-                f"**{dano_real} de dano**.\n\n"
-                f"❤️ **HP**\n"
-                f"**{hp_anterior}/{f['hp_max']}** "
-                f"→ "
-                f"**0/{f['hp_max']}**\n"
-                f"💀 **DERROTADO**\n\n"
-                f"🗑️ NPC removido da mesa."
-            )
-
-            return
-
-        # ====================================================
-        # ATUALIZAR HP
-        # ====================================================
-
-        cursor.execute("""
-            UPDATE fichas
-            SET hp_atual = ?
-            WHERE id = ?
-            AND channel_id = ?
-        """, (
-            novo_hp,
-            f["id"],
-            interaction.channel.id
-        ))
-
-        db.commit()
-
-        # ====================================================
-        # REGISTRAR HISTÓRICO DE DANO
-        # ====================================================
-
-        registrar_historico(
-            interaction.channel.id,
-            f["id"],
-            f["nome"],
-            f["tipo"],
-            interaction.user.id,
-            "dano",
-            campo="hp",
-            valor_anterior=hp_anterior,
-            valor_novo=novo_hp,
-            descricao=(
-                f"💥 {dano_real} de dano recebido."
-            )
-        )
-
-        estado = estado_hp(
-            novo_hp,
-            f["hp_max"]
-        )
-
-        # ====================================================
-        # NOME VISUAL
-        # ====================================================
-
-        if f["tipo"] == "npc":
-
-            nome_visual = (
-                f"{f['nome']} #{f['id']}"
-            )
-
-        else:
-
-            nome_visual = f[
-                "nome"
-            ]
-
-        # ====================================================
-        # RESPOSTA
-        # ====================================================
-
-        await interaction.response.send_message(
-            f"💥 **DANO**\n\n"
-            f"**{nome_visual}** recebeu "
-            f"**{dano_real} de dano**.\n\n"
-            f"❤️ **HP**\n"
-            f"**{hp_anterior}/{f['hp_max']}** "
-            f"→ "
-            f"**{novo_hp}/{f['hp_max']}**\n"
-            f"{estado}"
-        )
-
-
-# ============================================================
-# SELECT — ESCOLHER ALVO DO DANO
-# ============================================================
-
-class DanoAlvoSelect(
-    discord.ui.Select
-):
-
-    def __init__(
-        self,
-        interaction
-    ):
-
-        self.autor_id = (
-            interaction.user.id
-        )
-
-        cursor.execute("""
-            SELECT
-                id,
-                nome,
-                tipo
-            FROM fichas
-            WHERE channel_id = ?
-            ORDER BY
-                tipo,
-                nome COLLATE NOCASE,
-                id
-            LIMIT 25
-        """, (
-            interaction.channel.id,
-        ))
-
-        resultados = cursor.fetchall()
-
-        opcoes = []
-
-        for (
-            ficha_id,
-            nome,
-            tipo
-        ) in resultados:
-
-            if tipo == "npc":
-
-                label = (
-                    f"{nome} #{ficha_id}"
-                )
-
-                emoji = "👹"
-
-                descricao = (
-                    f"NPC • ID {ficha_id}"
-                )
-
-            else:
-
-                label = nome
-                emoji = "👤"
-                descricao = "Jogador"
-
-            opcoes.append(
-                discord.SelectOption(
-                    label=label[:100],
-                    value=str(
-                        ficha_id
-                    ),
-                    emoji=emoji,
-                    description=descricao[:100]
-                )
-            )
-
-        super().__init__(
-            placeholder="Escolha quem receberá o dano...",
-            min_values=1,
-            max_values=1,
-            options=opcoes
-        )
-
-
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
-
-        if (
-            interaction.user.id
-            != self.autor_id
-        ):
-
-            await interaction.response.send_message(
-                "❌ Somente quem iniciou a ação "
-                "pode escolher o alvo.",
-                ephemeral=True
-            )
-
-            return
-
-        ficha_id = int(
-            self.values[0]
-        )
-
-        dados = buscar_ficha_por_id(
-            interaction.channel.id,
-            ficha_id
-        )
-
-        if dados is None:
-
-            await interaction.response.send_message(
-                "❌ Essa ficha não existe mais.",
-                ephemeral=True
-            )
-
-            return
-
-        await interaction.response.send_modal(
-            DanoModal(
-                ficha_id,
-                self.autor_id
-            )
-        )
-
-
-# ============================================================
-# VIEW — ESCOLHER ALVO DO DANO
-# ============================================================
-
-class DanoAlvoView(
-    discord.ui.View
-):
-
-    def __init__(
-        self,
-        interaction
-    ):
-
-        super().__init__(
-            timeout=120
-        )
-
-        self.add_item(
-            DanoAlvoSelect(
-                interaction
-            )
-        )
-
-
-# ============================================================
-# REGISTRAR COMANDOS DE JOGADOR
-# ============================================================
-
-def registrar_comandos_jogador(bot):
 
     # ========================================================
     # CRIAR FICHA
@@ -489,8 +104,8 @@ def registrar_comandos_jogador(bot):
     )
     @app_commands.describe(
         nome="Nome do personagem",
-        hp="HP inicial e máximo",
-        mana="Mana inicial e máxima"
+        hp="HP máximo",
+        mana="Mana máxima"
     )
     async def criarficha(
         interaction: discord.Interaction,
@@ -508,10 +123,10 @@ def registrar_comandos_jogador(bot):
             interaction.user.id
         )
 
-        if existente:
+        if existente is not None:
 
             await interaction.response.send_message(
-                "⚠️ Você já possui uma ficha neste canal.",
+                "❌ Você já possui uma ficha neste canal.",
                 ephemeral=True
             )
 
@@ -535,7 +150,7 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        nome = nome[:50]
+        nome = nome.strip()[:50]
 
         cursor.execute("""
             INSERT INTO fichas (
@@ -544,55 +159,89 @@ def registrar_comandos_jogador(bot):
                 mestre_id,
                 tipo,
                 nome,
+
                 hp_atual,
                 hp_max,
+
                 mana_atual,
                 mana_max,
+
                 xp,
+
                 forca,
                 destreza,
                 vigor,
                 inteligencia,
                 carisma,
                 raciocinio,
+
+                academicos,
+                idiomas,
+                oficios,
+                armas_brancas,
+                intimidacao,
+                ocultismo,
+                briga,
+                investigacao,
+                persuasao,
+                ciencias,
+                labia,
+                prontidao,
+                conhecimentos_gerais,
+                lideranca,
+                sobrevivencia,
+                conducao,
+                manha,
+                tecnologia,
+                esportes,
+                medicina,
+                mira,
+                esquiva,
+                furtividade,
+
                 aleatorio
             )
             VALUES (
                 ?, ?, NULL, 'jogador', ?,
-                ?, ?, ?, ?, 0,
-                0, 0, 0, 0, 0, 0, 0
+
+                ?, ?,
+
+                ?, ?,
+
+                0,
+
+                0, 0, 0, 0, 0, 0,
+
+                0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+                0, 0, 0,
+
+                0
             )
         """, (
             interaction.channel.id,
             interaction.user.id,
             nome,
+
             hp,
             hp,
+
             mana,
             mana
         ))
 
         db.commit()
 
-        estado_inicial_hp = estado_hp(
-            hp,
-            hp
-        )
-
-        estado_inicial_mana = estado_mana(
-            mana,
-            mana
-        )
-
         await interaction.response.send_message(
             f"📜 Ficha de **{nome}** criada!\n\n"
-            f"❤️ HP: **{hp}/{hp}** • "
-            f"{estado_inicial_hp}\n"
-            f"🔵 Mana: **{mana}/{mana}** • "
-            f"{estado_inicial_mana}\n"
+            f"❤️ HP: **{hp}/{hp}**\n"
+            f"🔵 Mana: **{mana}/{mana}**\n"
             f"✨ XP: **0**\n"
             f"⚡ RC: **5**"
         )
+
 
     # ========================================================
     # MOSTRAR PRÓPRIA FICHA
@@ -636,8 +285,9 @@ def registrar_comandos_jogador(bot):
             ephemeral=True
         )
 
+
     # ========================================================
-    # VER FICHA DE OUTRO JOGADOR
+    # VER FICHA
     # ========================================================
 
     @bot.tree.command(
@@ -645,7 +295,7 @@ def registrar_comandos_jogador(bot):
         description="Visualiza a ficha de outro jogador."
     )
     @app_commands.describe(
-        jogador="Jogador cuja ficha você deseja visualizar"
+        jogador="Jogador cuja ficha deseja visualizar"
     )
     async def verficha(
         interaction: discord.Interaction,
@@ -682,8 +332,9 @@ def registrar_comandos_jogador(bot):
             )
         )
 
+
     # ========================================================
-    # ALTERAR ATRIBUTO
+    # ATRIBUTO
     # ========================================================
 
     @bot.tree.command(
@@ -719,7 +370,7 @@ def registrar_comandos_jogador(bot):
             app_commands.Choice(
                 name="Raciocínio",
                 value="raciocinio"
-            )
+            ),
         ]
     )
     async def atributo(
@@ -755,10 +406,9 @@ def registrar_comandos_jogador(bot):
             dados
         )
 
-        valor_anterior = f.get(
-            atributo.value,
-            0
-        )
+        valor_anterior = f[
+            atributo.value
+        ]
 
         cursor.execute(
             f"""
@@ -774,29 +424,36 @@ def registrar_comandos_jogador(bot):
 
         db.commit()
 
-        # ====================================================
-        # HISTÓRICO DO ATRIBUTO
-        # ====================================================
+        if valor_anterior != valor:
 
-        registrar_historico(
-            interaction.channel.id,
-            f["id"],
-            f["nome"],
-            f["tipo"],
-            interaction.user.id,
-            "atributo",
-            campo=atributo.value,
-            valor_anterior=valor_anterior,
-            valor_novo=valor
-        )
+            registrar_historico(
+                f["channel_id"],
+                f["id"],
+                f["nome"],
+                f["tipo"],
+                interaction.user.id,
+                "atributo",
+                campo=atributo.value,
+                valor_anterior=valor_anterior,
+                valor_novo=valor,
+                descricao=(
+                    "⚔️ Atributo alterado."
+                )
+            )
+
+        emoji, nome = ATRIBUTOS[
+            atributo.value
+        ]
 
         await interaction.response.send_message(
-            f"⚔️ **{ATRIBUTOS[atributo.value][1]}** "
+            f"{emoji} **{nome}** "
             f"alterado para **{valor}**!"
         )
 
+
     # ========================================================
-    # ALTERAR PERÍCIA
+    # PERÍCIA
+    # LIMITE GLOBAL: 0 A 5
     # ========================================================
 
     @bot.tree.command(
@@ -805,7 +462,7 @@ def registrar_comandos_jogador(bot):
     )
     @app_commands.describe(
         pericia="Perícia",
-        valor="Novo valor"
+        valor="Novo valor entre 0 e 5"
     )
     @app_commands.choices(
         pericia=[
@@ -900,7 +557,7 @@ def registrar_comandos_jogador(bot):
             app_commands.Choice(
                 name="Furtividade",
                 value="furtividade"
-            )
+            ),
         ]
     )
     async def pericia(
@@ -923,10 +580,14 @@ def registrar_comandos_jogador(bot):
 
             return
 
-        if valor < 0:
+        if (
+            valor < 0
+            or valor > 5
+        ):
 
             await interaction.response.send_message(
-                "❌ O valor não pode ser negativo.",
+                "❌ O valor da perícia precisa "
+                "estar entre **0 e 5**.",
                 ephemeral=True
             )
 
@@ -936,10 +597,9 @@ def registrar_comandos_jogador(bot):
             dados
         )
 
-        valor_anterior = f.get(
-            pericia.value,
-            0
-        )
+        valor_anterior = f[
+            pericia.value
+        ]
 
         cursor.execute(
             f"""
@@ -955,34 +615,40 @@ def registrar_comandos_jogador(bot):
 
         db.commit()
 
-        # ====================================================
-        # HISTÓRICO DA PERÍCIA
-        # ====================================================
+        if valor_anterior != valor:
 
-        registrar_historico(
-            interaction.channel.id,
-            f["id"],
-            f["nome"],
-            f["tipo"],
-            interaction.user.id,
-            "pericia",
-            campo=pericia.value,
-            valor_anterior=valor_anterior,
-            valor_novo=valor
-        )
+            registrar_historico(
+                f["channel_id"],
+                f["id"],
+                f["nome"],
+                f["tipo"],
+                interaction.user.id,
+                "pericia",
+                campo=pericia.value,
+                valor_anterior=valor_anterior,
+                valor_novo=valor,
+                descricao=(
+                    "📚 Perícia alterada."
+                )
+            )
+
+        emoji, nome = PERICIAS[
+            pericia.value
+        ]
 
         await interaction.response.send_message(
-            f"📚 **{PERICIAS[pericia.value][1]}** "
+            f"{emoji} **{nome}** "
             f"alterada para **{valor}**!"
         )
 
+
     # ========================================================
-    # ALTERAR HP E MANA
+    # ALTERAR FICHA
     # ========================================================
 
     @bot.tree.command(
         name="alterarficha",
-        description="Altera HP e Mana máximos de um jogador."
+        description="Altera HP e Mana máximos de uma ficha."
     )
     @app_commands.describe(
         jogador="Jogador",
@@ -1004,7 +670,7 @@ def registrar_comandos_jogador(bot):
         if dados is None:
 
             await interaction.response.send_message(
-                "❌ Esse jogador não possui uma ficha.",
+                "❌ Ficha não encontrada.",
                 ephemeral=True
             )
 
@@ -1020,19 +686,26 @@ def registrar_comandos_jogador(bot):
         ):
 
             await interaction.response.send_message(
-                "❌ Você não pode alterar essa ficha.",
+                "❌ Você não possui permissão "
+                "para alterar esta ficha.",
                 ephemeral=True
             )
 
             return
 
-        if (
-            hp <= 0
-            or mana < 0
-        ):
+        if hp <= 0:
 
             await interaction.response.send_message(
-                "❌ Valores inválidos.",
+                "❌ O HP precisa ser maior que 0.",
+                ephemeral=True
+            )
+
+            return
+
+        if mana < 0:
+
+            await interaction.response.send_message(
+                "❌ A Mana não pode ser negativa.",
                 ephemeral=True
             )
 
@@ -1048,7 +721,8 @@ def registrar_comandos_jogador(bot):
 
         cursor.execute("""
             UPDATE fichas
-            SET hp_atual = ?,
+            SET
+                hp_atual = ?,
                 hp_max = ?,
                 mana_atual = ?,
                 mana_max = ?
@@ -1063,62 +737,57 @@ def registrar_comandos_jogador(bot):
 
         db.commit()
 
-        # ====================================================
-        # HISTÓRICO DOS RECURSOS
-        # ====================================================
+        novo_hp = f"{hp}/{hp}"
+        nova_mana = f"{mana}/{mana}"
 
-        registrar_historico(
-            interaction.channel.id,
-            f["id"],
-            f["nome"],
-            f["tipo"],
-            interaction.user.id,
-            "recursos",
-            campo="hp",
-            valor_anterior=hp_anterior,
-            valor_novo=f"{hp}/{hp}"
-        )
+        if hp_anterior != novo_hp:
 
-        registrar_historico(
-            interaction.channel.id,
-            f["id"],
-            f["nome"],
-            f["tipo"],
-            interaction.user.id,
-            "recursos",
-            campo="mana",
-            valor_anterior=mana_anterior,
-            valor_novo=f"{mana}/{mana}"
-        )
+            registrar_historico(
+                f["channel_id"],
+                f["id"],
+                f["nome"],
+                f["tipo"],
+                interaction.user.id,
+                "recursos",
+                campo="hp",
+                valor_anterior=hp_anterior,
+                valor_novo=novo_hp,
+                descricao=(
+                    "❤️ HP alterado."
+                )
+            )
 
-        estado_atual_hp = estado_hp(
-            hp,
-            hp
-        )
+        if mana_anterior != nova_mana:
 
-        estado_atual_mana = estado_mana(
-            mana,
-            mana
-        )
+            registrar_historico(
+                f["channel_id"],
+                f["id"],
+                f["nome"],
+                f["tipo"],
+                interaction.user.id,
+                "recursos",
+                campo="mana",
+                valor_anterior=mana_anterior,
+                valor_novo=nova_mana,
+                descricao=(
+                    "🔵 Mana alterada."
+                )
+            )
 
         await interaction.response.send_message(
-            f"⚙️ **FICHA ATUALIZADA**\n\n"
-            f"**{f['nome']}**\n\n"
-            f"❤️ **HP**\n"
-            f"**{hp}/{hp}**\n"
-            f"{estado_atual_hp}\n\n"
-            f"🔵 **Mana**\n"
-            f"**{mana}/{mana}**\n"
-            f"{estado_atual_mana}"
+            f"✅ Ficha de **{f['nome']}** atualizada.\n\n"
+            f"❤️ HP: **{hp}/{hp}**\n"
+            f"🔵 Mana: **{mana}/{mana}**"
         )
 
+
     # ========================================================
-    # APAGAR FICHA
+    # APAGAR PRÓPRIA FICHA
     # ========================================================
 
     @bot.tree.command(
         name="apagarficha",
-        description="Apaga sua ficha."
+        description="Apaga sua própria ficha."
     )
     async def apagarficha(
         interaction: discord.Interaction
@@ -1152,8 +821,433 @@ def registrar_comandos_jogador(bot):
         db.commit()
 
         await interaction.response.send_message(
-            f"🗑️ A ficha **{f['nome']}** foi apagada."
+            f"🗑️ Ficha **{f['nome']}** apagada.",
+            ephemeral=True
         )
+
+
+    # ========================================================
+    # SELETOR DE ALVO
+    # ========================================================
+
+    class AlvoSelect(
+        discord.ui.Select
+    ):
+
+        def __init__(
+            self,
+            interaction_original,
+            acao
+        ):
+
+            self.interaction_original = (
+                interaction_original
+            )
+
+            self.acao = acao
+
+            cursor.execute("""
+                SELECT id, nome, tipo
+                FROM fichas
+                WHERE channel_id = ?
+                ORDER BY tipo, nome
+                LIMIT 25
+            """, (
+                interaction_original.channel.id,
+            ))
+
+            resultados = cursor.fetchall()
+
+            opcoes = []
+
+            for (
+                ficha_id,
+                nome,
+                tipo
+            ) in resultados:
+
+                if tipo == "npc":
+
+                    label = (
+                        f"{nome} #{ficha_id}"
+                    )
+
+                    emoji = "👹"
+
+                else:
+
+                    label = nome
+                    emoji = "👤"
+
+                opcoes.append(
+                    discord.SelectOption(
+                        label=label[:100],
+                        value=str(
+                            ficha_id
+                        ),
+                        emoji=emoji
+                    )
+                )
+
+            super().__init__(
+                placeholder="Escolha a ficha...",
+                min_values=1,
+                max_values=1,
+                options=opcoes
+            )
+
+
+        async def callback(
+            self,
+            interaction: discord.Interaction
+        ):
+
+            ficha_id = int(
+                self.values[0]
+            )
+
+            dados = buscar_ficha_por_id(
+                interaction.channel.id,
+                ficha_id
+            )
+
+            if dados is None:
+
+                await interaction.response.send_message(
+                    "❌ A ficha não existe mais.",
+                    ephemeral=True
+                )
+
+                return
+
+            f = transformar_ficha(
+                dados
+            )
+
+            await interaction.response.send_modal(
+                ValorAcaoModal(
+                    f,
+                    self.acao
+                )
+            )
+
+
+    # ========================================================
+    # VIEW DO ALVO
+    # ========================================================
+
+    class AlvoView(
+        discord.ui.View
+    ):
+
+        def __init__(
+            self,
+            interaction_original,
+            acao
+        ):
+
+            super().__init__(
+                timeout=300
+            )
+
+            self.add_item(
+                AlvoSelect(
+                    interaction_original,
+                    acao
+                )
+            )
+
+
+    # ========================================================
+    # MODAL DE VALOR DA AÇÃO
+    # ========================================================
+
+    class ValorAcaoModal(
+        discord.ui.Modal
+    ):
+
+        def __init__(
+            self,
+            ficha,
+            acao
+        ):
+
+            self.ficha = ficha
+            self.acao = acao
+
+            titulo = {
+                "dano": "Aplicar dano",
+                "cura": "Aplicar cura",
+                "recuperarmana": "Recuperar Mana",
+            }.get(
+                acao,
+                "Alterar recurso"
+            )
+
+            super().__init__(
+                title=titulo
+            )
+
+            self.valor = (
+                discord.ui.TextInput(
+                    label="Valor",
+                    placeholder="Digite um número",
+                    required=True
+                )
+            )
+
+            self.add_item(
+                self.valor
+            )
+
+
+        async def on_submit(
+            self,
+            interaction: discord.Interaction
+        ):
+
+            try:
+
+                valor = int(
+                    self.valor.value
+                )
+
+            except ValueError:
+
+                await interaction.response.send_message(
+                    "❌ Informe um número inteiro.",
+                    ephemeral=True
+                )
+
+                return
+
+            if valor <= 0:
+
+                await interaction.response.send_message(
+                    "❌ O valor precisa ser maior que 0.",
+                    ephemeral=True
+                )
+
+                return
+
+            dados = buscar_ficha_por_id(
+                interaction.channel.id,
+                self.ficha["id"]
+            )
+
+            if dados is None:
+
+                await interaction.response.send_message(
+                    "❌ Esta ficha não existe mais.",
+                    ephemeral=True
+                )
+
+                return
+
+            f = transformar_ficha(
+                dados
+            )
+
+            # =================================================
+            # DANO
+            # =================================================
+
+            if self.acao == "dano":
+
+                hp_anterior = f[
+                    "hp_atual"
+                ]
+
+                novo_hp = max(
+                    0,
+                    hp_anterior - valor
+                )
+
+                if (
+                    f["tipo"] == "npc"
+                    and novo_hp <= 0
+                ):
+
+                    registrar_historico(
+                        f["channel_id"],
+                        f["id"],
+                        f["nome"],
+                        f["tipo"],
+                        interaction.user.id,
+                        "npc_derrotado",
+                        campo="hp",
+                        valor_anterior=hp_anterior,
+                        valor_novo=0,
+                        descricao=(
+                            f"💥 {valor} de dano recebido. "
+                            f"🗑️ NPC derrotado e removido da mesa."
+                        )
+                    )
+
+                    cursor.execute("""
+                        DELETE FROM fichas
+                        WHERE id = ?
+                    """, (
+                        f["id"],
+                    ))
+
+                    db.commit()
+
+                    await interaction.response.send_message(
+                        f"💀 NPC **{f['nome']} #{f['id']}** "
+                        f"foi derrotado!\n"
+                        f"🗑️ O NPC foi removido da mesa."
+                    )
+
+                    return
+
+                cursor.execute("""
+                    UPDATE fichas
+                    SET hp_atual = ?
+                    WHERE id = ?
+                """, (
+                    novo_hp,
+                    f["id"]
+                ))
+
+                db.commit()
+
+                registrar_historico(
+                    f["channel_id"],
+                    f["id"],
+                    f["nome"],
+                    f["tipo"],
+                    interaction.user.id,
+                    "dano",
+                    campo="hp",
+                    valor_anterior=hp_anterior,
+                    valor_novo=novo_hp,
+                    descricao=(
+                        f"💥 {valor} de dano recebido."
+                    )
+                )
+
+                await interaction.response.send_message(
+                    f"💥 **{f['nome']}** recebeu "
+                    f"**{valor} de dano**!\n"
+                    f"❤️ HP: **{novo_hp}/{f['hp_max']}** "
+                    f"• {estado_hp(novo_hp, f['hp_max'])}"
+                )
+
+                return
+
+            # =================================================
+            # CURA
+            # =================================================
+
+            if self.acao == "cura":
+
+                hp_anterior = f[
+                    "hp_atual"
+                ]
+
+                novo_hp = min(
+                    f["hp_max"],
+                    hp_anterior + valor
+                )
+
+                recuperado = (
+                    novo_hp
+                    - hp_anterior
+                )
+
+                cursor.execute("""
+                    UPDATE fichas
+                    SET hp_atual = ?
+                    WHERE id = ?
+                """, (
+                    novo_hp,
+                    f["id"]
+                ))
+
+                db.commit()
+
+                if novo_hp != hp_anterior:
+
+                    registrar_historico(
+                        f["channel_id"],
+                        f["id"],
+                        f["nome"],
+                        f["tipo"],
+                        interaction.user.id,
+                        "cura",
+                        campo="hp",
+                        valor_anterior=hp_anterior,
+                        valor_novo=novo_hp,
+                        descricao=(
+                            f"💚 {recuperado} de HP recuperado."
+                        )
+                    )
+
+                await interaction.response.send_message(
+                    f"💚 **{f['nome']}** recuperou "
+                    f"**{recuperado} de HP**!\n"
+                    f"❤️ HP: **{novo_hp}/{f['hp_max']}** "
+                    f"• {estado_hp(novo_hp, f['hp_max'])}"
+                )
+
+                return
+
+            # =================================================
+            # RECUPERAR MANA
+            # =================================================
+
+            if self.acao == "recuperarmana":
+
+                mana_anterior = f[
+                    "mana_atual"
+                ]
+
+                nova_mana = min(
+                    f["mana_max"],
+                    mana_anterior + valor
+                )
+
+                recuperado = (
+                    nova_mana
+                    - mana_anterior
+                )
+
+                cursor.execute("""
+                    UPDATE fichas
+                    SET mana_atual = ?
+                    WHERE id = ?
+                """, (
+                    nova_mana,
+                    f["id"]
+                ))
+
+                db.commit()
+
+                if nova_mana != mana_anterior:
+
+                    registrar_historico(
+                        f["channel_id"],
+                        f["id"],
+                        f["nome"],
+                        f["tipo"],
+                        interaction.user.id,
+                        "mana_recuperada",
+                        campo="mana",
+                        valor_anterior=mana_anterior,
+                        valor_novo=nova_mana,
+                        descricao=(
+                            f"💧 {recuperado} de Mana recuperada."
+                        )
+                    )
+
+                await interaction.response.send_message(
+                    f"💧 **{f['nome']}** recuperou "
+                    f"**{recuperado} de Mana**!\n"
+                    f"🔵 Mana: **{nova_mana}/{f['mana_max']}** "
+                    f"• {estado_mana(nova_mana, f['mana_max'])}"
+                )
+
 
     # ========================================================
     # DANO
@@ -1168,16 +1262,15 @@ def registrar_comandos_jogador(bot):
     ):
 
         cursor.execute("""
-            SELECT COUNT(*)
+            SELECT id
             FROM fichas
             WHERE channel_id = ?
+            LIMIT 25
         """, (
             interaction.channel.id,
         ))
 
-        quantidade = cursor.fetchone()[0]
-
-        if quantidade <= 0:
+        if not cursor.fetchall():
 
             await interaction.response.send_message(
                 "❌ Não existem fichas neste canal.",
@@ -1188,11 +1281,13 @@ def registrar_comandos_jogador(bot):
 
         await interaction.response.send_message(
             "💥 **Escolha quem receberá o dano:**",
-            view=DanoAlvoView(
-                interaction
+            view=AlvoView(
+                interaction,
+                "dano"
             ),
             ephemeral=True
         )
+
 
     # ========================================================
     # CURA
@@ -1200,104 +1295,79 @@ def registrar_comandos_jogador(bot):
 
     @bot.tree.command(
         name="cura",
-        description="Cura um jogador."
-    )
-    @app_commands.describe(
-        jogador="Jogador que receberá a cura",
-        valor="Quantidade de cura"
+        description="Escolhe uma ficha para receber cura."
     )
     async def cura(
-        interaction: discord.Interaction,
-        jogador: discord.Member,
-        valor: int
+        interaction: discord.Interaction
     ):
 
-        dados = buscar_ficha_jogador(
-            interaction.channel.id,
-            jogador.id
-        )
-
-        if dados is None:
-
-            await interaction.response.send_message(
-                "❌ Ficha não encontrada.",
-                ephemeral=True
-            )
-
-            return
-
-        if valor <= 0:
-
-            await interaction.response.send_message(
-                "❌ A cura precisa ser maior que 0.",
-                ephemeral=True
-            )
-
-            return
-
-        f = transformar_ficha(
-            dados
-        )
-
-        hp_anterior = f[
-            "hp_atual"
-        ]
-
-        novo_hp = min(
-            f["hp_max"],
-            hp_anterior + valor
-        )
-
-        recuperado = (
-            novo_hp
-            - hp_anterior
-        )
-
         cursor.execute("""
-            UPDATE fichas
-            SET hp_atual = ?
-            WHERE id = ?
+            SELECT id
+            FROM fichas
+            WHERE channel_id = ?
+            LIMIT 25
         """, (
-            novo_hp,
-            f["id"]
+            interaction.channel.id,
         ))
 
-        db.commit()
+        if not cursor.fetchall():
 
-        # ====================================================
-        # HISTÓRICO DA CURA
-        # ====================================================
-
-        registrar_historico(
-            interaction.channel.id,
-            f["id"],
-            f["nome"],
-            f["tipo"],
-            interaction.user.id,
-            "cura",
-            campo="hp",
-            valor_anterior=hp_anterior,
-            valor_novo=novo_hp,
-            descricao=(
-                f"💚 {recuperado} de HP recuperado."
+            await interaction.response.send_message(
+                "❌ Não existem fichas neste canal.",
+                ephemeral=True
             )
-        )
 
-        estado = estado_hp(
-            novo_hp,
-            f["hp_max"]
-        )
+            return
 
         await interaction.response.send_message(
-            f"💚 **CURA**\n\n"
-            f"**{f['nome']}** recuperou "
-            f"**{recuperado} de HP**.\n\n"
-            f"❤️ **HP**\n"
-            f"**{hp_anterior}/{f['hp_max']}** "
-            f"→ "
-            f"**{novo_hp}/{f['hp_max']}**\n"
-            f"{estado}"
+            "💚 **Escolha quem receberá a cura:**",
+            view=AlvoView(
+                interaction,
+                "cura"
+            ),
+            ephemeral=True
         )
+
+
+    # ========================================================
+    # RECUPERAR MANA
+    # ========================================================
+
+    @bot.tree.command(
+        name="recuperarmana",
+        description="Escolhe uma ficha para recuperar Mana."
+    )
+    async def recuperarmana(
+        interaction: discord.Interaction
+    ):
+
+        cursor.execute("""
+            SELECT id
+            FROM fichas
+            WHERE channel_id = ?
+            LIMIT 25
+        """, (
+            interaction.channel.id,
+        ))
+
+        if not cursor.fetchall():
+
+            await interaction.response.send_message(
+                "❌ Não existem fichas neste canal.",
+                ephemeral=True
+            )
+
+            return
+
+        await interaction.response.send_message(
+            "💧 **Escolha quem recuperará Mana:**",
+            view=AlvoView(
+                interaction,
+                "recuperarmana"
+            ),
+            ephemeral=True
+        )
+
 
     # ========================================================
     # GASTAR MANA
@@ -1308,7 +1378,7 @@ def registrar_comandos_jogador(bot):
         description="Gasta Mana da sua própria ficha."
     )
     @app_commands.describe(
-        valor="Quantidade de Mana"
+        valor="Quantidade de Mana gasta"
     )
     async def gastarmana(
         interaction: discord.Interaction,
@@ -1323,15 +1393,11 @@ def registrar_comandos_jogador(bot):
         if dados is None:
 
             await interaction.response.send_message(
-                "❌ Você não possui uma ficha.",
+                "❌ Você não possui uma ficha neste canal.",
                 ephemeral=True
             )
 
             return
-
-        f = transformar_ficha(
-            dados
-        )
 
         if valor <= 0:
 
@@ -1342,18 +1408,14 @@ def registrar_comandos_jogador(bot):
 
             return
 
+        f = transformar_ficha(
+            dados
+        )
+
         if valor > f["mana_atual"]:
 
-            estado_atual = estado_mana(
-                f["mana_atual"],
-                f["mana_max"]
-            )
-
             await interaction.response.send_message(
-                f"❌ **MANA INSUFICIENTE**\n\n"
-                f"🔵 **Mana**\n"
-                f"**{f['mana_atual']}/{f['mana_max']}**\n"
-                f"{estado_atual}",
+                "❌ Você não possui Mana suficiente.",
                 ephemeral=True
             )
 
@@ -1379,12 +1441,8 @@ def registrar_comandos_jogador(bot):
 
         db.commit()
 
-        # ====================================================
-        # HISTÓRICO DO GASTO DE MANA
-        # ====================================================
-
         registrar_historico(
-            interaction.channel.id,
+            f["channel_id"],
             f["id"],
             f["nome"],
             f["tipo"],
@@ -1398,134 +1456,21 @@ def registrar_comandos_jogador(bot):
             )
         )
 
-        estado = estado_mana(
-            nova_mana,
-            f["mana_max"]
-        )
-
         await interaction.response.send_message(
-            f"🔮 **MANA CONSUMIDA**\n\n"
-            f"**{f['nome']}** gastou "
-            f"**{valor} de Mana**.\n\n"
-            f"🔵 **Mana**\n"
-            f"**{mana_anterior}/{f['mana_max']}** "
-            f"→ "
-            f"**{nova_mana}/{f['mana_max']}**\n"
-            f"{estado}"
+            f"🔮 **{f['nome']}** gastou "
+            f"**{valor} de Mana**!\n"
+            f"🔵 Mana: **{nova_mana}/{f['mana_max']}** "
+            f"• {estado_mana(nova_mana, f['mana_max'])}"
         )
+
 
     # ========================================================
-    # RECUPERAR MANA
-    # ========================================================
-
-    @bot.tree.command(
-        name="recuperarmana",
-        description="Recupera Mana de um jogador."
-    )
-    @app_commands.describe(
-        jogador="Jogador que recuperará Mana",
-        valor="Quantidade de Mana"
-    )
-    async def recuperarmana(
-        interaction: discord.Interaction,
-        jogador: discord.Member,
-        valor: int
-    ):
-
-        dados = buscar_ficha_jogador(
-            interaction.channel.id,
-            jogador.id
-        )
-
-        if dados is None:
-
-            await interaction.response.send_message(
-                "❌ Ficha não encontrada.",
-                ephemeral=True
-            )
-
-            return
-
-        if valor <= 0:
-
-            await interaction.response.send_message(
-                "❌ O valor precisa ser maior que 0.",
-                ephemeral=True
-            )
-
-            return
-
-        f = transformar_ficha(
-            dados
-        )
-
-        mana_anterior = f[
-            "mana_atual"
-        ]
-
-        nova_mana = min(
-            f["mana_max"],
-            mana_anterior + valor
-        )
-
-        recuperado = (
-            nova_mana
-            - mana_anterior
-        )
-
-        cursor.execute("""
-            UPDATE fichas
-            SET mana_atual = ?
-            WHERE id = ?
-        """, (
-            nova_mana,
-            f["id"]
-        ))
-
-        db.commit()
-
-        # ====================================================
-        # HISTÓRICO DA RECUPERAÇÃO DE MANA
-        # ====================================================
-
-        registrar_historico(
-            interaction.channel.id,
-            f["id"],
-            f["nome"],
-            f["tipo"],
-            interaction.user.id,
-            "mana_recuperada",
-            campo="mana",
-            valor_anterior=mana_anterior,
-            valor_novo=nova_mana,
-            descricao=(
-                f"💧 {recuperado} de Mana recuperada."
-            )
-        )
-
-        estado = estado_mana(
-            nova_mana,
-            f["mana_max"]
-        )
-
-        await interaction.response.send_message(
-            f"💧 **MANA RECUPERADA**\n\n"
-            f"**{f['nome']}** recuperou "
-            f"**{recuperado} de Mana**.\n\n"
-            f"🔵 **Mana**\n"
-            f"**{mana_anterior}/{f['mana_max']}** "
-            f"→ "
-            f"**{nova_mana}/{f['mana_max']}**\n"
-            f"{estado}"
-        )
-
-    # ========================================================
-    # XP
+    # ADICIONAR XP
     # ========================================================
 
     @bot.tree.command(
         name="addxp",
-        description="Adiciona XP a uma ficha."
+        description="Adiciona XP à ficha de um jogador."
     )
     @app_commands.describe(
         jogador="Jogador que receberá XP",
@@ -1555,19 +1500,14 @@ def registrar_comandos_jogador(bot):
             dados
         )
 
-        if (
-            f["dono_id"]
-            != interaction.user.id
-            and not eh_admin(
-                interaction
-            )
-            and not eh_mestre(
-                interaction
-            )
+        if not pode_alterar_ficha(
+            interaction,
+            f
         ):
 
             await interaction.response.send_message(
-                "❌ Você não pode alterar o XP dessa ficha.",
+                "❌ Você não possui permissão "
+                "para alterar esta ficha.",
                 ephemeral=True
             )
 
@@ -1576,48 +1516,34 @@ def registrar_comandos_jogador(bot):
         if valor <= 0:
 
             await interaction.response.send_message(
-                "❌ O XP precisa ser maior que 0.",
+                "❌ O XP adicionado precisa ser maior que 0.",
                 ephemeral=True
             )
 
             return
 
-        xp_anterior = f.get(
-            "xp",
-            0
+        xp_anterior = f[
+            "xp"
+        ]
+
+        novo_xp = (
+            xp_anterior
+            + valor
         )
 
         cursor.execute("""
             UPDATE fichas
-            SET xp = xp + ?
+            SET xp = ?
             WHERE id = ?
         """, (
-            valor,
+            novo_xp,
             f["id"]
         ))
 
         db.commit()
 
-        cursor.execute("""
-            SELECT xp
-            FROM fichas
-            WHERE id = ?
-        """, (
-            f["id"],
-        ))
-
-        resultado = cursor.fetchone()
-
-        xp_atual = resultado[
-            0
-        ]
-
-        # ====================================================
-        # HISTÓRICO DO XP
-        # ====================================================
-
         registrar_historico(
-            interaction.channel.id,
+            f["channel_id"],
             f["id"],
             f["nome"],
             f["tipo"],
@@ -1625,15 +1551,14 @@ def registrar_comandos_jogador(bot):
             "xp",
             campo="xp",
             valor_anterior=xp_anterior,
-            valor_novo=xp_atual,
+            valor_novo=novo_xp,
             descricao=(
                 f"✨ {valor} XP adicionado."
             )
         )
 
         await interaction.response.send_message(
-            f"✨ **XP ADICIONADO**\n\n"
-            f"**{f['nome']}** recebeu "
-            f"**{valor} XP**.\n\n"
-            f"✨ XP atual: **{xp_atual}**"
+            f"✨ **{f['nome']}** recebeu "
+            f"**{valor} XP**!\n"
+            f"✨ XP atual: **{novo_xp}**"
         )
