@@ -1,4 +1,4 @@
-import sqlite3
+ import sqlite3
 
 
 # ============================================================
@@ -48,38 +48,38 @@ cursor.execute("""
 
         xp INTEGER NOT NULL DEFAULT 0,
 
-        forca INTEGER NOT NULL DEFAULT 0,
-        destreza INTEGER NOT NULL DEFAULT 0,
-        vigor INTEGER NOT NULL DEFAULT 0,
-        inteligencia INTEGER NOT NULL DEFAULT 0,
-        carisma INTEGER NOT NULL DEFAULT 0,
-        raciocinio INTEGER NOT NULL DEFAULT 0,
+        forca INTEGER DEFAULT 0,
+        destreza INTEGER DEFAULT 0,
+        vigor INTEGER DEFAULT 0,
+        inteligencia INTEGER DEFAULT 0,
+        carisma INTEGER DEFAULT 0,
+        raciocinio INTEGER DEFAULT 0,
 
-        academicos INTEGER NOT NULL DEFAULT 0,
-        idiomas INTEGER NOT NULL DEFAULT 0,
-        oficios INTEGER NOT NULL DEFAULT 0,
-        armas_brancas INTEGER NOT NULL DEFAULT 0,
-        intimidacao INTEGER NOT NULL DEFAULT 0,
-        ocultismo INTEGER NOT NULL DEFAULT 0,
-        briga INTEGER NOT NULL DEFAULT 0,
-        investigacao INTEGER NOT NULL DEFAULT 0,
-        persuasao INTEGER NOT NULL DEFAULT 0,
-        ciencias INTEGER NOT NULL DEFAULT 0,
-        labia INTEGER NOT NULL DEFAULT 0,
-        prontidao INTEGER NOT NULL DEFAULT 0,
-        conhecimentos_gerais INTEGER NOT NULL DEFAULT 0,
-        lideranca INTEGER NOT NULL DEFAULT 0,
-        sobrevivencia INTEGER NOT NULL DEFAULT 0,
-        conducao INTEGER NOT NULL DEFAULT 0,
-        manha INTEGER NOT NULL DEFAULT 0,
-        tecnologia INTEGER NOT NULL DEFAULT 0,
-        esportes INTEGER NOT NULL DEFAULT 0,
-        medicina INTEGER NOT NULL DEFAULT 0,
-        mira INTEGER NOT NULL DEFAULT 0,
-        esquiva INTEGER NOT NULL DEFAULT 0,
-        furtividade INTEGER NOT NULL DEFAULT 0,
+        academicos INTEGER DEFAULT 0,
+        idiomas INTEGER DEFAULT 0,
+        oficios INTEGER DEFAULT 0,
+        armas_brancas INTEGER DEFAULT 0,
+        intimidacao INTEGER DEFAULT 0,
+        ocultismo INTEGER DEFAULT 0,
+        briga INTEGER DEFAULT 0,
+        investigacao INTEGER DEFAULT 0,
+        persuasao INTEGER DEFAULT 0,
+        ciencias INTEGER DEFAULT 0,
+        labia INTEGER DEFAULT 0,
+        prontidao INTEGER DEFAULT 0,
+        conhecimentos_gerais INTEGER DEFAULT 0,
+        lideranca INTEGER DEFAULT 0,
+        sobrevivencia INTEGER DEFAULT 0,
+        conducao INTEGER DEFAULT 0,
+        manha INTEGER DEFAULT 0,
+        tecnologia INTEGER DEFAULT 0,
+        esportes INTEGER DEFAULT 0,
+        medicina INTEGER DEFAULT 0,
+        mira INTEGER DEFAULT 0,
+        esquiva INTEGER DEFAULT 0,
+        furtividade INTEGER DEFAULT 0,
 
-        aleatorio INTEGER NOT NULL DEFAULT 0
+        aleatorio INTEGER DEFAULT 0
     )
 """)
 
@@ -142,6 +142,15 @@ cursor.execute("""
 
 cursor.execute("""
     CREATE INDEX IF NOT EXISTS
+    idx_historico_acao
+    ON historico (
+        acao
+    )
+""")
+
+
+cursor.execute("""
+    CREATE INDEX IF NOT EXISTS
     idx_historico_data
     ON historico (
         criado_em
@@ -153,30 +162,29 @@ db.commit()
 
 
 # ============================================================
-# MIGRAÇÃO DE COLUNAS
+# MIGRAÇÃO DE COLUNAS DA TABELA FICHAS
 # ============================================================
 
 def adicionar_coluna_se_nao_existir(
-    tabela,
-    coluna,
-    definicao
+    nome_coluna
 ):
 
     cursor.execute(
-        f"PRAGMA table_info({tabela})"
+        "PRAGMA table_info(fichas)"
     )
 
     colunas = [
-        linha[1]
-        for linha in cursor.fetchall()
+        coluna[1]
+        for coluna in cursor.fetchall()
     ]
 
-    if coluna not in colunas:
+    if nome_coluna not in colunas:
 
         cursor.execute(
             f"""
-            ALTER TABLE {tabela}
-            ADD COLUMN {coluna} {definicao}
+            ALTER TABLE fichas
+            ADD COLUMN {nome_coluna}
+            INTEGER DEFAULT 0
             """
         )
 
@@ -184,176 +192,51 @@ def adicionar_coluna_se_nao_existir(
 
 
 # ============================================================
-# GARANTIR COLUNAS DA TABELA FICHAS
+# GARANTIR TODAS AS COLUNAS DA FICHA
 # ============================================================
 
 COLUNAS_FICHAS = [
-    (
-        "xp",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
+    "xp",
 
-    (
-        "forca",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
+    "forca",
+    "destreza",
+    "vigor",
+    "inteligencia",
+    "carisma",
+    "raciocinio",
 
-    (
-        "destreza",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
+    "academicos",
+    "idiomas",
+    "oficios",
+    "armas_brancas",
+    "intimidacao",
+    "ocultismo",
+    "briga",
+    "investigacao",
+    "persuasao",
+    "ciencias",
+    "labia",
+    "prontidao",
+    "conhecimentos_gerais",
+    "lideranca",
+    "sobrevivencia",
+    "conducao",
+    "manha",
+    "tecnologia",
+    "esportes",
+    "medicina",
+    "mira",
+    "esquiva",
+    "furtividade",
 
-    (
-        "vigor",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "inteligencia",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "carisma",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "raciocinio",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "academicos",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "idiomas",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "oficios",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "armas_brancas",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "intimidacao",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "ocultismo",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "briga",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "investigacao",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "persuasao",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "ciencias",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "labia",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "prontidao",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "conhecimentos_gerais",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "lideranca",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "sobrevivencia",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "conducao",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "manha",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "tecnologia",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "esportes",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "medicina",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "mira",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "esquiva",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "furtividade",
-        "INTEGER NOT NULL DEFAULT 0"
-    ),
-
-    (
-        "aleatorio",
-        "INTEGER NOT NULL DEFAULT 0"
-    )
+    "aleatorio",
 ]
 
 
-for (
-    nome_coluna,
-    definicao_coluna
-) in COLUNAS_FICHAS:
+for coluna in COLUNAS_FICHAS:
 
     adicionar_coluna_se_nao_existir(
-        "fichas",
-        nome_coluna,
-        definicao_coluna
+        coluna
     )
 
 
@@ -390,17 +273,18 @@ def obter_mestre(
         SELECT mestre_id
         FROM mesas
         WHERE channel_id = ?
+        LIMIT 1
     """, (
         channel_id,
     ))
 
     resultado = cursor.fetchone()
 
-    if resultado:
+    if resultado is None:
 
-        return resultado[0]
+        return None
 
-    return None
+    return resultado[0]
 
 
 # ============================================================
@@ -428,6 +312,26 @@ def buscar_ficha_jogador(
 
 
 # ============================================================
+# BUSCAR FICHA POR ID
+# ============================================================
+
+def buscar_ficha(
+    ficha_id
+):
+
+    cursor.execute("""
+        SELECT *
+        FROM fichas
+        WHERE id = ?
+        LIMIT 1
+    """, (
+        ficha_id,
+    ))
+
+    return cursor.fetchone()
+
+
+# ============================================================
 # REGISTRAR HISTÓRICO
 # ============================================================
 
@@ -443,6 +347,18 @@ def registrar_historico(
     valor_novo=None,
     descricao=None
 ):
+
+    if valor_anterior is not None:
+
+        valor_anterior = str(
+            valor_anterior
+        )
+
+    if valor_novo is not None:
+
+        valor_novo = str(
+            valor_novo
+        )
 
     cursor.execute("""
         INSERT INTO historico (
@@ -468,16 +384,8 @@ def registrar_historico(
         usuario_id,
         acao,
         campo,
-        (
-            None
-            if valor_anterior is None
-            else str(valor_anterior)
-        ),
-        (
-            None
-            if valor_novo is None
-            else str(valor_novo)
-        ),
+        valor_anterior,
+        valor_novo,
         descricao
     ))
 
@@ -505,3 +413,110 @@ def buscar_historico(
     ))
 
     return cursor.fetchall()
+
+
+# ============================================================
+# BUSCAR HISTÓRICO DE UMA FICHA
+# ============================================================
+
+def buscar_historico_ficha(
+    channel_id,
+    ficha_id,
+    limite=100
+):
+
+    cursor.execute("""
+        SELECT *
+        FROM historico
+        WHERE channel_id = ?
+        AND ficha_id = ?
+        ORDER BY id DESC
+        LIMIT ?
+    """, (
+        channel_id,
+        ficha_id,
+        limite
+    ))
+
+    return cursor.fetchall()
+
+
+# ============================================================
+# ATUALIZAR HP
+# ============================================================
+
+def atualizar_hp(
+    ficha_id,
+    novo_hp
+):
+
+    cursor.execute("""
+        UPDATE fichas
+        SET hp_atual = ?
+        WHERE id = ?
+    """, (
+        novo_hp,
+        ficha_id
+    ))
+
+    db.commit()
+
+
+# ============================================================
+# ATUALIZAR MANA
+# ============================================================
+
+def atualizar_mana(
+    ficha_id,
+    nova_mana
+):
+
+    cursor.execute("""
+        UPDATE fichas
+        SET mana_atual = ?
+        WHERE id = ?
+    """, (
+        nova_mana,
+        ficha_id
+    ))
+
+    db.commit()
+
+
+# ============================================================
+# ADICIONAR XP
+# ============================================================
+
+def adicionar_xp(
+    ficha_id,
+    valor
+):
+
+    cursor.execute("""
+        UPDATE fichas
+        SET xp = xp + ?
+        WHERE id = ?
+    """, (
+        valor,
+        ficha_id
+    ))
+
+    db.commit()
+
+
+# ============================================================
+# DELETAR FICHA
+# ============================================================
+
+def deletar_ficha(
+    ficha_id
+):
+
+    cursor.execute("""
+        DELETE FROM fichas
+        WHERE id = ?
+    """, (
+        ficha_id,
+    ))
+
+    db.commit()
