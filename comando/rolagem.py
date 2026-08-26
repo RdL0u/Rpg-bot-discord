@@ -2,6 +2,7 @@ import discord
 
 from database import (
     buscar_ficha_jogador,
+    registrar_historico,
 )
 
 from fichas import (
@@ -327,7 +328,7 @@ class RolagemView(
     ):
 
         # ====================================================
-        # GARANTIR QUE AS DUAS OPÇÕES EXISTEM
+        # GARANTIR QUE AS OPÇÕES EXISTEM
         # ====================================================
 
         if (
@@ -421,7 +422,7 @@ class RolagemView(
         )
 
         # ====================================================
-        # ROLAR
+        # REALIZAR ROLAGEM
         # ====================================================
 
         dados_rolagem = realizar_rolagem(
@@ -438,6 +439,55 @@ class RolagemView(
             nome_pericia=nome_pericia,
             emoji_pericia=emoji_pericia,
             dados_rolagem=dados_rolagem
+        )
+
+        # ====================================================
+        # DADOS DA ROLAGEM
+        # ====================================================
+
+        dado_1 = dados_rolagem[
+            "dado_1"
+        ]
+
+        dado_2 = dados_rolagem[
+            "dado_2"
+        ]
+
+        modificador = dados_rolagem[
+            "modificador"
+        ]
+
+        resultado = dados_rolagem[
+            "resultado"
+        ]
+
+        # ====================================================
+        # REGISTRAR NO HISTÓRICO
+        # ====================================================
+
+        descricao_historico = (
+            f"{emoji_atributo} {nome_atributo}: "
+            f"{valor_atributo}\n"
+            f"{emoji_pericia} {nome_pericia}: "
+            f"{valor_pericia}\n"
+            f"🎲 Dados: {dado_1} + {dado_2}\n"
+            f"➕ Modificador: {modificador}\n"
+            f"🏁 Resultado: {resultado}"
+        )
+
+        registrar_historico(
+            interaction.channel.id,
+            ficha["id"],
+            ficha["nome"],
+            "jogador",
+            interaction.user.id,
+            "rolagem",
+            campo="rolagem",
+            valor_anterior=None,
+            valor_novo=str(
+                resultado
+            ),
+            descricao=descricao_historico
         )
 
         # ====================================================
