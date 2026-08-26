@@ -62,6 +62,10 @@ def criar_texto_painel(
     sessao
 ):
 
+    # ========================================================
+    # ATRIBUTO
+    # ========================================================
+
     if sessao.atributo is None:
 
         atributo_texto = (
@@ -79,6 +83,10 @@ def criar_texto_painel(
             f"{NOMES_ATRIBUTOS[sessao.atributo]}"
         )
 
+    # ========================================================
+    # PERÍCIA
+    # ========================================================
+
     if sessao.pericia is None:
 
         pericia_texto = (
@@ -95,11 +103,15 @@ def criar_texto_painel(
             f"{emoji} {nome}"
         )
 
+    # ========================================================
+    # TEXTO
+    # ========================================================
+
     return (
         "🎲 **NOVA ROLAGEM**\n\n"
-        "⚔️ Atributo:\n"
+        "⚔️ **Atributo**\n"
         f"{atributo_texto}\n\n"
-        "📚 Perícia:\n"
+        "📚 **Perícia**\n"
         f"{pericia_texto}\n\n"
         "Selecione um atributo e uma perícia "
         "e depois pressione **🎲 Rolar**."
@@ -151,6 +163,10 @@ class AtributoSelect(
             row=0
         )
 
+
+    # ========================================================
+    # SELECIONAR ATRIBUTO
+    # ========================================================
 
     async def callback(
         self,
@@ -213,6 +229,10 @@ class PericiaSelect(
         )
 
 
+    # ========================================================
+    # SELECIONAR PERÍCIA
+    # ========================================================
+
     async def callback(
         self,
         interaction: discord.Interaction
@@ -251,6 +271,10 @@ class RolagemView(
 
         self.sessao = sessao
 
+        # ====================================================
+        # SELECTS
+        # ====================================================
+
         self.add_item(
             AtributoSelect(
                 self
@@ -281,8 +305,10 @@ class RolagemView(
         ):
 
             await interaction.response.send_message(
-                "❌ Somente quem iniciou esta rolagem "
-                "pode usar estes controles.",
+                (
+                    "❌ Somente quem iniciou esta rolagem "
+                    "pode usar estes controles."
+                ),
                 ephemeral=True
             )
 
@@ -292,7 +318,7 @@ class RolagemView(
 
 
     # ========================================================
-    # ATUALIZAR BOTÃO
+    # HABILITAR / DESABILITAR BOTÃO
     # ========================================================
 
     def atualizar_botao(
@@ -324,7 +350,23 @@ class RolagemView(
     ):
 
         # ====================================================
-        # VERIFICAR SE FOI SELECIONADO
+        # VALIDAR CANAL
+        # ====================================================
+
+        if interaction.channel is None:
+
+            await interaction.response.send_message(
+                (
+                    "❌ Não foi possível identificar "
+                    "o canal desta rolagem."
+                ),
+                ephemeral=True
+            )
+
+            return
+
+        # ====================================================
+        # VALIDAR SELEÇÕES
         # ====================================================
 
         if (
@@ -334,7 +376,10 @@ class RolagemView(
         ):
 
             await interaction.response.send_message(
-                "❌ Escolha um atributo e uma perícia.",
+                (
+                    "❌ Escolha um atributo "
+                    "e uma perícia."
+                ),
                 ephemeral=True
             )
 
@@ -420,8 +465,42 @@ class RolagemView(
             valor_pericia
         )
 
+        # ====================================================
+        # DADOS DOS DADOS
+        # ====================================================
+
+        dado_1 = int(
+            dados_rolagem[
+                "dado_1"
+            ]
+        )
+
+        dado_2 = int(
+            dados_rolagem[
+                "dado_2"
+            ]
+        )
+
+        modificador = int(
+            dados_rolagem[
+                "modificador"
+            ]
+        )
+
+        resultado = int(
+            dados_rolagem[
+                "resultado"
+            ]
+        )
+
+        # ====================================================
+        # FORMATAR RESULTADO
+        # ====================================================
+
         texto_resultado = formatar_rolagem(
-            nome_jogador=interaction.user.display_name,
+            nome_jogador=(
+                interaction.user.display_name
+            ),
             nome_atributo=nome_atributo,
             emoji_atributo=emoji_atributo,
             nome_pericia=nome_pericia,
@@ -430,27 +509,7 @@ class RolagemView(
         )
 
         # ====================================================
-        # DADOS DA ROLAGEM
-        # ====================================================
-
-        dado_1 = dados_rolagem[
-            "dado_1"
-        ]
-
-        dado_2 = dados_rolagem[
-            "dado_2"
-        ]
-
-        modificador = dados_rolagem[
-            "modificador"
-        ]
-
-        resultado = dados_rolagem[
-            "resultado"
-        ]
-
-        # ====================================================
-        # REGISTRAR HISTÓRICO
+        # REGISTRAR NO HISTÓRICO
         # ====================================================
 
         descricao_historico = (
@@ -463,38 +522,52 @@ class RolagemView(
             f"🏁 Resultado: {resultado}"
         )
 
-        registrar_historico(
-            interaction.channel.id,
-            ficha["id"],
-            ficha["nome"],
-            "jogador",
-            interaction.user.id,
-            "rolagem",
-            campo="rolagem",
-            valor_anterior=None,
-            valor_novo=str(
-                resultado
-            ),
-            descricao=descricao_historico
-        )
+        try:
+
+            registrar_historico(
+                interaction.channel.id,
+                ficha["id"],
+                ficha["nome"],
+                "jogador",
+                interaction.user.id,
+                "rolagem",
+                campo="rolagem",
+                valor_anterior=None,
+                valor_novo=str(
+                    resultado
+                ),
+                descricao=descricao_historico
+            )
+
+        except Exception as erro:
+
+            print(
+                "Erro ao registrar histórico "
+                f"da rolagem: {erro}"
+            )
 
         # ====================================================
-        # FECHAR PAINEL PRIVADO
+        # RESPONDER AO BOTÃO
+        #
+        # O painel continua privado.
         # ====================================================
 
         await interaction.response.edit_message(
             content=(
-                "✅ Rolagem realizada!\n\n"
-                "🎲 O resultado foi publicado "
-                "para toda a mesa."
+                "✅ **Rolagem realizada!**\n\n"
+                "🎲 Publicando o resultado "
+                "para toda a mesa..."
             ),
             view=None
         )
 
         # ====================================================
-        # PUBLICAR RESULTADO
+        # RESULTADO PÚBLICO
         #
         # IMPORTANTE:
+        # NÃO usamos interaction.channel.send().
+        #
+        # O followup pertence à interação e
         # ephemeral=False torna a mensagem pública.
         # ====================================================
 
@@ -505,28 +578,99 @@ class RolagemView(
                 ephemeral=False
             )
 
-        except discord.Forbidden:
+        # ====================================================
+        # SEM ACESSO AO CANAL
+        # ====================================================
 
-            await interaction.followup.send(
-                (
-                    "❌ Não consegui publicar a rolagem "
-                    "no canal.\n\n"
-                    "Verifique se o bot possui a permissão "
-                    "**Enviar Mensagens** neste canal."
-                ),
-                ephemeral=True
+        except discord.Forbidden as erro:
+
+            print(
+                "Erro ao publicar rolagem: "
+                f"{erro}"
             )
+
+            try:
+
+                await interaction.followup.send(
+                    (
+                        "❌ **Não consegui publicar "
+                        "a rolagem no canal.**\n\n"
+                        "O Discord informou que o bot "
+                        "não possui acesso suficiente.\n\n"
+                        "Verifique as permissões do BotRPG:\n"
+                        "• Ver Canal\n"
+                        "• Enviar Mensagens\n"
+                        "• Ler Histórico de Mensagens\n"
+                        "• Usar Comandos de Aplicativos\n\n"
+                        "Se estiver usando um tópico/thread, "
+                        "verifique também:\n"
+                        "• Enviar Mensagens em Tópicos"
+                    ),
+                    ephemeral=True
+                )
+
+            except Exception as erro_aviso:
+
+                print(
+                    "Também não foi possível enviar "
+                    "o aviso de erro: "
+                    f"{erro_aviso}"
+                )
+
+        # ====================================================
+        # ERRO HTTP
+        # ====================================================
 
         except discord.HTTPException as erro:
 
-            await interaction.followup.send(
-                (
-                    "❌ O Discord recusou o envio "
-                    "da rolagem pública.\n"
-                    f"Erro: `{erro}`"
-                ),
-                ephemeral=True
+            print(
+                "Erro HTTP ao publicar rolagem: "
+                f"{erro}"
             )
+
+            try:
+
+                await interaction.followup.send(
+                    (
+                        "❌ O Discord recusou o envio "
+                        "da rolagem pública.\n\n"
+                        f"Erro: `{erro}`"
+                    ),
+                    ephemeral=True
+                )
+
+            except Exception as erro_aviso:
+
+                print(
+                    "Também não foi possível enviar "
+                    "o aviso de erro HTTP: "
+                    f"{erro_aviso}"
+                )
+
+        # ====================================================
+        # ERRO INESPERADO
+        # ====================================================
+
+        except Exception as erro:
+
+            print(
+                "Erro inesperado ao publicar "
+                f"rolagem: {erro}"
+            )
+
+            try:
+
+                await interaction.followup.send(
+                    (
+                        "❌ Ocorreu um erro inesperado "
+                        "ao publicar a rolagem."
+                    ),
+                    ephemeral=True
+                )
+
+            except Exception:
+
+                pass
 
         self.stop()
 
@@ -538,6 +682,10 @@ class RolagemView(
 def registrar_comandos_rolagem(
     bot
 ):
+
+    # ========================================================
+    # /ROLAR
+    # ========================================================
 
     @bot.tree.command(
         name="rolar",
@@ -557,8 +705,10 @@ def registrar_comandos_rolagem(
         if interaction.channel is None:
 
             await interaction.response.send_message(
-                "❌ Este comando precisa ser usado "
-                "dentro de uma mesa.",
+                (
+                    "❌ Este comando precisa ser usado "
+                    "dentro de uma mesa."
+                ),
                 ephemeral=True
             )
 
@@ -576,8 +726,10 @@ def registrar_comandos_rolagem(
         if dados is None:
 
             await interaction.response.send_message(
-                "❌ Você precisa possuir uma ficha "
-                "neste canal para realizar uma rolagem.",
+                (
+                    "❌ Você precisa possuir uma ficha "
+                    "neste canal para realizar uma rolagem."
+                ),
                 ephemeral=True
             )
 
@@ -597,11 +749,11 @@ def registrar_comandos_rolagem(
         )
 
         # ====================================================
-        # PAINEL PRIVADO
+        # ABRIR PAINEL PRIVADO
         # ====================================================
 
         await interaction.response.send_message(
-            criar_texto_painel(
+            content=criar_texto_painel(
                 sessao
             ),
             view=view,
