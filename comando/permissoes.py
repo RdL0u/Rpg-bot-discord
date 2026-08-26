@@ -41,11 +41,32 @@ def eh_admin(
 
         return False
 
-    return (
-        interaction.user
-        .guild_permissions
-        .administrator
-    )
+    # ========================================================
+    # DONO DO SERVIDOR
+    # ========================================================
+
+    if (
+        interaction.guild.owner_id
+        == interaction.user.id
+    ):
+
+        return True
+
+    # ========================================================
+    # PERMISSÃO ADMINISTRADOR
+    # ========================================================
+
+    try:
+
+        return bool(
+            interaction.user
+            .guild_permissions
+            .administrator
+        )
+
+    except AttributeError:
+
+        return False
 
 
 # ============================================================
@@ -69,6 +90,17 @@ def pode_gerenciar_canal(
         return False
 
     # ========================================================
+    # DONO DO SERVIDOR
+    # ========================================================
+
+    if (
+        interaction.guild.owner_id
+        == interaction.user.id
+    ):
+
+        return True
+
+    # ========================================================
     # ADMINISTRADOR GLOBAL
     # ========================================================
 
@@ -79,25 +111,63 @@ def pode_gerenciar_canal(
         return True
 
     # ========================================================
-    # PERMISSÕES ESPECÍFICAS DO CANAL
+    # PERMISSÃO INFORMADA PELA INTERAÇÃO
+    #
+    # Esta é a principal verificação para permissões
+    # específicas daquele canal.
     # ========================================================
 
     try:
 
-        permissoes = (
+        permissoes_interacao = (
+            interaction.permissions
+        )
+
+        if (
+            permissoes_interacao
+            is not None
+            and
+            permissoes_interacao.manage_channels
+        ):
+
+            return True
+
+    except (
+        AttributeError,
+        TypeError
+    ):
+
+        pass
+
+    # ========================================================
+    # PERMISSÕES CALCULADAS DIRETAMENTE PELO CANAL
+    #
+    # Serve como segunda verificação.
+    # ========================================================
+
+    try:
+
+        permissoes_canal = (
             interaction.channel
             .permissions_for(
                 interaction.user
             )
         )
 
-        return (
-            permissoes.manage_channels
-        )
+        if (
+            permissoes_canal.manage_channels
+        ):
 
-    except Exception:
+            return True
 
-        return False
+    except (
+        AttributeError,
+        TypeError
+    ):
+
+        pass
+
+    return False
 
 
 # ============================================================
@@ -291,7 +361,10 @@ def pode_gerenciar_mesa(
 
 # ============================================================
 # DEFINIR MESTRE
-# ADMIN GLOBAL OU GERENCIAR CANAL
+#
+# DONO DO SERVIDOR
+# OU ADMINISTRADOR
+# OU GERENCIAR CANAL
 # ============================================================
 
 def pode_definir_mestre(
