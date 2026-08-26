@@ -1,4 +1,3 @@
-import asyncio
 import discord
 
 from discord.ext import (
@@ -6,7 +5,9 @@ from discord.ext import (
     tasks,
 )
 
-from config import TOKEN
+from config import (
+    TOKEN,
+)
 
 from backup import (
     criar_backup,
@@ -32,12 +33,21 @@ from comando.backup import (
     registrar_comandos_backup,
 )
 
+from comando.rolagem import (
+    registrar_comandos_rolagem,
+)
+
 
 # ============================================================
-# CONFIGURAÇÃO DO BOT
+# INTENTS
 # ============================================================
 
 intents = discord.Intents.default()
+
+
+# ============================================================
+# BOT
+# ============================================================
 
 bot = commands.Bot(
     command_prefix="!",
@@ -46,7 +56,7 @@ bot = commands.Bot(
 
 
 # ============================================================
-# REGISTRAR COMANDOS
+# REGISTRAR MÓDULOS
 # ============================================================
 
 registrar_comandos_jogador(
@@ -69,6 +79,10 @@ registrar_comandos_backup(
     bot
 )
 
+registrar_comandos_rolagem(
+    bot
+)
+
 
 # ============================================================
 # BACKUP AUTOMÁTICO
@@ -81,35 +95,23 @@ async def backup_automatico():
 
     try:
 
-        caminho = await asyncio.to_thread(
-            criar_backup
-        )
+        caminho = criar_backup()
 
         print(
-            "Backup automático criado: "
-            f"{caminho.name}"
+            "Backup automático criado:",
+            caminho
         )
 
     except Exception as erro:
 
         print(
-            "Erro ao criar backup automático: "
-            f"{erro}"
+            "Erro no backup automático:",
+            erro
         )
 
 
 # ============================================================
-# AGUARDAR BOT FICAR PRONTO
-# ============================================================
-
-@backup_automatico.before_loop
-async def antes_do_backup():
-
-    await bot.wait_until_ready()
-
-
-# ============================================================
-# BOT ONLINE
+# BOT PRONTO
 # ============================================================
 
 @bot.event
@@ -120,16 +122,12 @@ async def on_ready():
     )
 
     # ========================================================
-    # INICIAR BACKUP AUTOMÁTICO
+    # BACKUP AUTOMÁTICO
     # ========================================================
 
     if not backup_automatico.is_running():
 
         backup_automatico.start()
-
-        print(
-            "Sistema de backup automático iniciado."
-        )
 
     # ========================================================
     # SINCRONIZAR COMANDOS
@@ -146,8 +144,7 @@ async def on_ready():
     except Exception as erro:
 
         print(
-            "Erro ao sincronizar comandos: "
-            f"{erro}"
+            f"Erro ao sincronizar comandos: {erro}"
         )
 
 
@@ -157,61 +154,78 @@ async def on_ready():
 
 @bot.tree.command(
     name="help",
-    description="Mostra os principais comandos do bot."
+    description="Mostra os comandos do BotRPG."
 )
-async def help_command(
+async def help(
     interaction: discord.Interaction
 ):
 
     embed = discord.Embed(
-        title="📖 AJUDA — BOT DE RPG",
+        title="📖 BotRPG",
         description=(
-            "Principais comandos disponíveis "
-            "para gerenciamento da mesa."
+            "Comandos disponíveis para a mesa."
         ),
         color=discord.Color.dark_red()
     )
 
+    # ========================================================
+    # JOGADORES
+    # ========================================================
+
     embed.add_field(
-        name="👤 JOGADORES",
+        name="👤 Jogador",
         value=(
             "`/criarficha` — Criar ficha\n"
             "`/ficha` — Ver sua ficha\n"
-            "`/verficha` — Ver outra ficha\n"
+            "`/verficha` — Ver ficha de jogador\n"
             "`/atributo` — Alterar atributo\n"
             "`/pericia` — Alterar perícia\n"
-            "`/apagarficha` — Apagar sua ficha"
-        ),
-        inline=False
-    )
-
-    embed.add_field(
-        name="❤️ RECURSOS",
-        value=(
-            "`/dano` — Aplicar dano\n"
-            "`/cura` — Recuperar HP\n"
+            "`/alterarficha` — Alterar HP/Mana\n"
+            "`/apagarficha` — Apagar ficha\n"
             "`/gastarmana` — Gastar Mana\n"
+            "`/dano` — Aplicar dano\n"
+            "`/cura` — Aplicar cura\n"
             "`/recuperarmana` — Recuperar Mana\n"
             "`/addxp` — Adicionar XP"
         ),
         inline=False
     )
 
+    # ========================================================
+    # ROLAGENS
+    # ========================================================
+
     embed.add_field(
-        name="👑 MESTRE E NPCs",
+        name="🎲 Rolagens",
         value=(
-            "`/mestre` — Ver Mestre da mesa\n"
-            "`/definirmestre` — Definir Mestre\n"
-            "`/passarmestre` — Passar Mestre\n"
-            "`/criarnpc` — Criar NPC\n"
-            "`/npcs` — Mostrar NPCs\n"
-            "`/apagarnpc` — Apagar NPCs"
+            "`/rolar` — Realiza uma rolagem "
+            "de **2d10 + Atributo + Perícia**"
         ),
         inline=False
     )
 
+    # ========================================================
+    # MESTRE
+    # ========================================================
+
     embed.add_field(
-        name="📋 GERENCIAMENTO",
+        name="👑 Mestre",
+        value=(
+            "`/criarnpc` — Criar NPC\n"
+            "`/npcs` — Ver NPCs\n"
+            "`/apagarnpc` — Apagar NPC\n"
+            "`/passarmestre` — Passar Mestre\n"
+            "`/mestre` — Ver Mestre"
+        ),
+        inline=False
+    )
+
+    # ========================================================
+    # MESA
+    # ========================================================
+
+    embed.add_field(
+        name="📋 Mesa",
         value=(
             "`/painel` — Painel da mesa\n"
             "`/historico` — Histórico da mesa"
@@ -219,22 +233,22 @@ async def help_command(
         inline=False
     )
 
+    # ========================================================
+    # ADMIN
+    # ========================================================
+
     embed.add_field(
-        name="💾 BACKUPS",
+        name="🛡️ Administrador",
         value=(
-            "`/backup` — Criar backup manual\n"
-            "`/backups` — Listar backups\n\n"
-            "🔒 Comandos de backup são "
-            "restritos a administradores."
+            "`/definirmestre` — Definir Mestre\n"
+            "`/backup` — Criar backup\n"
+            "`/backups` — Ver backups"
         ),
         inline=False
     )
 
     embed.set_footer(
-        text=(
-            "As fichas também possuem "
-            "controles de visualização e edição."
-        )
+        text="BotRPG • Sistema de RPG"
     )
 
     await interaction.response.send_message(
