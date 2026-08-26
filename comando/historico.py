@@ -34,6 +34,7 @@ FILTROS = {
     "xp": "XP",
     "atributos": "Atributos",
     "pericias": "Perícias",
+    "rolagens": "Rolagens",
 }
 
 
@@ -223,6 +224,17 @@ def filtrar_historico(
             )
         ]
 
+    if filtro == "rolagens":
+
+        return [
+            registro
+            for registro in registros
+            if (
+                registro.get("acao")
+                == "rolagem"
+            )
+        ]
+
     return registros
 
 
@@ -335,10 +347,16 @@ def emoji_acao(
         )
     ).lower()
 
+    if acao == "rolagem":
+
+        return "🎲"
+
     if (
         acao == "dano"
-        or campo == "hp"
-        and "cura" not in acao
+        or (
+            campo == "hp"
+            and "cura" not in acao
+        )
     ):
 
         return "❤️"
@@ -425,36 +443,58 @@ def formatar_registro(
         )
     )
 
+    acao = registro.get(
+        "acao"
+    )
+
     linhas = [
         f"{emoji} **{nome}**"
     ]
 
-    if descricao:
+    # ========================================================
+    # ROLAGEM
+    # ========================================================
 
-        linhas.append(
-            str(
+    if acao == "rolagem":
+
+        if descricao:
+
+            linhas.append(
                 descricao
             )
-        )
 
-    elif campo:
+    else:
 
-        linhas.append(
-            f"`{campo}` alterado."
-        )
+        if descricao:
 
-    if (
-        anterior is not None
-        or novo is not None
-    ):
-
-        linhas.append(
-            (
-                f"**{anterior}**"
-                f" → "
-                f"**{novo}**"
+            linhas.append(
+                str(
+                    descricao
+                )
             )
-        )
+
+        elif campo:
+
+            linhas.append(
+                f"`{campo}` alterado."
+            )
+
+        if (
+            anterior is not None
+            or novo is not None
+        ):
+
+            linhas.append(
+                (
+                    f"**{anterior}**"
+                    f" → "
+                    f"**{novo}**"
+                )
+            )
+
+    # ========================================================
+    # USUÁRIO / DATA
+    # ========================================================
 
     if usuario_id:
 
@@ -652,6 +692,15 @@ class HistoricoFiltroSelect(
                 default=(
                     view_historico.filtro
                     == "pericias"
+                )
+            ),
+            discord.SelectOption(
+                label="Rolagens",
+                value="rolagens",
+                emoji="🎲",
+                default=(
+                    view_historico.filtro
+                    == "rolagens"
                 )
             ),
         ]
