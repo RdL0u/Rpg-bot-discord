@@ -28,7 +28,7 @@ def tem_canal(
 
 
 # ============================================================
-# ADMINISTRADOR
+# ADMINISTRADOR GLOBAL
 # ============================================================
 
 def eh_admin(
@@ -46,6 +46,58 @@ def eh_admin(
         .guild_permissions
         .administrator
     )
+
+
+# ============================================================
+# GERENCIAR CANAL
+# ============================================================
+
+def pode_gerenciar_canal(
+    interaction: discord.Interaction
+):
+
+    if not tem_guild(
+        interaction
+    ):
+
+        return False
+
+    if not tem_canal(
+        interaction
+    ):
+
+        return False
+
+    # ========================================================
+    # ADMINISTRADOR GLOBAL
+    # ========================================================
+
+    if eh_admin(
+        interaction
+    ):
+
+        return True
+
+    # ========================================================
+    # PERMISSÕES ESPECÍFICAS DO CANAL
+    # ========================================================
+
+    try:
+
+        permissoes = (
+            interaction.channel
+            .permissions_for(
+                interaction.user
+            )
+        )
+
+        return (
+            permissoes.manage_channels
+        )
+
+    except Exception:
+
+        return False
 
 
 # ============================================================
@@ -137,15 +189,12 @@ def eh_mestre_do_npc(
 
         return False
 
-    # Mestre atual do canal
     if eh_mestre(
         interaction
     ):
 
         return True
 
-    # Compatibilidade com NPCs que já possuem
-    # mestre_id gravado diretamente na ficha
     return (
         ficha.get("mestre_id")
         == interaction.user.id
@@ -165,7 +214,6 @@ def pode_alterar_ficha(
 
         return False
 
-    # Administrador sempre pode alterar
     if eh_admin(
         interaction
     ):
@@ -176,13 +224,8 @@ def pode_alterar_ficha(
         "tipo"
     )
 
-    # ========================================================
-    # FICHA DE JOGADOR
-    # ========================================================
-
     if tipo == "jogador":
 
-        # O próprio jogador
         if eh_dono_ficha(
             interaction,
             ficha
@@ -190,7 +233,6 @@ def pode_alterar_ficha(
 
             return True
 
-        # Mestre atual da mesa
         if eh_mestre(
             interaction
         ):
@@ -198,10 +240,6 @@ def pode_alterar_ficha(
             return True
 
         return False
-
-    # ========================================================
-    # NPC
-    # ========================================================
 
     if tipo == "npc":
 
@@ -253,15 +291,14 @@ def pode_gerenciar_mesa(
 
 # ============================================================
 # DEFINIR MESTRE
+# ADMIN GLOBAL OU GERENCIAR CANAL
 # ============================================================
 
 def pode_definir_mestre(
     interaction: discord.Interaction
 ):
 
-    # Mantém a regra atual:
-    # somente administradores.
-    return eh_admin(
+    return pode_gerenciar_canal(
         interaction
     )
 
@@ -274,8 +311,6 @@ def pode_passar_mestre(
     interaction: discord.Interaction
 ):
 
-    # Mantém a regra atual:
-    # Mestre atual ou administrador.
     return eh_admin_ou_mestre(
         interaction
     )
@@ -342,8 +377,6 @@ def pode_alterar_xp(
     ficha
 ):
 
-    # Por enquanto mantém exatamente a mesma
-    # regra geral de alteração da ficha.
     return pode_alterar_ficha(
         interaction,
         ficha
@@ -404,7 +437,6 @@ def pode_ver_historico(
     interaction: discord.Interaction
 ):
 
-    # Mantemos inicialmente Mestre ou Admin.
     return eh_admin_ou_mestre(
         interaction
     )
@@ -418,9 +450,6 @@ def pode_usar_painel(
     interaction: discord.Interaction
 ):
 
-    # O painel continua acessível.
-    # As ações dentro dele continuam sendo
-    # controladas pelas permissões específicas.
     return True
 
 
@@ -432,7 +461,6 @@ def pode_criar_backup(
     interaction: discord.Interaction
 ):
 
-    # Backup continua exclusivo para administrador.
     return eh_admin(
         interaction
     )
@@ -442,8 +470,6 @@ def pode_visualizar_backups(
     interaction: discord.Interaction
 ):
 
-    # Listagem de backups continua exclusiva
-    # para administrador.
     return eh_admin(
         interaction
     )
